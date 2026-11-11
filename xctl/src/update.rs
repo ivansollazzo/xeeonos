@@ -19,6 +19,7 @@ use std::process::Command;
 
 use crate::channel;
 use crate::config;
+use crate::oci;
 use crate::util::{Result, err, need_root, output, run as run_program};
 use crate::version::{compare, read_os_release};
 
@@ -124,16 +125,20 @@ impl Drop for Cleanup<'_> {
 
 /// Put the update files into `dir`, verifying the signed manifest first.
 fn fetch(source: &Source, dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
-    let dir_str = dir.to_str().ok_or_else(|| err("non-UTF-8 path"))?;
+    if !matches!(source, Source::Dir(_)) {
+        wait_for_network();
+    }
     match source {
         Source::Oci(reference) => {
             println!("Downloading {reference}...");
-            // oras downloads every file of the artifact; we check them all below.
-            output(
-                "oras",
-                &["pull", "--no-tty", "--output", dir_str, reference],
-            )?;
+            let artifact = oci::Artifact::open(reference)?;
+            artifact.download("SHA256SUMS", &dir.join("SHA256SUMS"))?;
+            // A missing signature is reported by verify_signature.
+            let _ = artifact.download("SHA256SUMS.gpg", &dir.join("SHA256SUMS.gpg"));
             verify_signature(dir, keyrings)?;
+            for name in manifest_files(&fs::read_to_string(dir.join("SHA256SUMS"))?)? {
+                artifact.download(&name, &dir.join(&name))?;
+            }
         }
         Source::Http(base) => {
             println!("Downloading from {base}...");
@@ -166,32 +171,59 @@ fn fetch(source: &Source, dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
     check_hashes(dir)
 }
 
-fn download(url: &str, to: &Path) -> Result<()> {
+/// Right after boot the network may still be coming up: give NetworkManager
+/// up to a minute to connect. If it is not installed or times out, go on and
+/// let the download report the error.
+fn wait_for_network() {
+    let _ = std::process::Command::new("nm-online")
+        .args(["--quiet", "--timeout=60"])
+        .status();
+}
+
+/// Download `url` into the file `to` with curl, retrying on network errors.
+/// `headers` are extra HTTP headers, e.g. "Authorization: Bearer ...".
+pub(crate) fn download_with(url: &str, to: &Path, headers: &[String]) -> Result<()> {
     let to = to.to_str().ok_or_else(|| err("non-UTF-8 path"))?;
-    output(
-        "curl",
-        &[
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--location",
-            "--retry",
-            "10",
-            "--retry-all-errors",
-            "--retry-delay",
-            "3",
-            "--output",
-            to,
-            url,
-        ],
-    )?;
+    let mut args: Vec<&str> = vec![
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--location",
+        // Retry transient failures (timeouts, 5xx, refused connections),
+        // but not answers like 404.
+        "--retry",
+        "5",
+        "--retry-connrefused",
+        "--retry-delay",
+        "3",
+    ];
+    for h in headers {
+        args.push("--header");
+        args.push(h);
+    }
+    args.extend(["--output", to, url]);
+    output("curl", &args)?;
     Ok(())
+}
+
+fn download(url: &str, to: &Path) -> Result<()> {
+    download_with(url, to, &[])
 }
 
 /// The file names listed in a SHA256SUMS manifest ("<hash>  <name>" lines).
 /// Anything that is not a plain file name is refused, so a manifest can never
 /// make us write outside the download directory.
-fn manifest_files(manifest: &str) -> Result<Vec<String>> {
+/// A plain file name: letters, digits and `._+~-`, not starting with a dot.
+/// No "/" means it can only ever name a file inside the download directory.
+pub(crate) fn is_plain_file_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with('.')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._+~-".contains(c))
+}
+
+pub(crate) fn manifest_files(manifest: &str) -> Result<Vec<String>> {
     manifest
         .lines()
         .filter(|l| !l.trim().is_empty())
@@ -201,12 +233,7 @@ fn manifest_files(manifest: &str) -> Result<Vec<String>> {
                 .nth(1)
                 .ok_or_else(|| err(format!("malformed SHA256SUMS line: {line}")))?;
             let name = name.trim_start_matches('*');
-            let plain = !name.is_empty()
-                && !name.starts_with('.')
-                && name
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || "._+~-".contains(c));
-            if plain {
+            if is_plain_file_name(name) {
                 Ok(name.to_string())
             } else {
                 Err(err(format!("unexpected file name in SHA256SUMS: {name}")))

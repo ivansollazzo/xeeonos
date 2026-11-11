@@ -4,6 +4,7 @@
 //! next. Each command lives in its own module (file) below.
 
 mod channel;
+mod oci;
 mod status;
 mod update;
 mod util;

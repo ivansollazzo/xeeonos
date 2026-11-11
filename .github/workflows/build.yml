@@ -303,7 +303,7 @@ jobs:
         run: |
           tools/boot-test.sh \
             --disk out/target.raw \
-            --run "/usr/bin/xctl install-system --disk /dev/vda --yes" \
+            --run "/bin/sh -c '/usr/bin/xctl install-system --disk /dev/vda --yes && exit 0; echo DIAG; ls -l /dev/disk/by-label; lsblk; ls /usr/lib/modules/*/kernel/drivers | head; journalctl -k -b --no-pager | grep -i -e sr0 -e sr_mod -e initramfs -e ahci -e ata; exit 1'" \
             --expect "XeeonOS $VERSION is installed on /dev/vda" \
             "out/xeeonos-$VERSION.iso" out/serial-install.log
 

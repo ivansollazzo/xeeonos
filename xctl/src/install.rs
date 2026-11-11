@@ -417,6 +417,15 @@ struct Mount(PathBuf);
 impl Mount {
     fn medium() -> Result<Mount> {
         let dev = Path::new("/dev/disk/by-label").join(MEDIUM_LABEL);
+        // Early in the boot, udev may not have named the disks yet: wait
+        // for it, and give a slow drive (USB, DVD) up to 30 seconds.
+        let _ = run("udevadm", &["settle", "--timeout=30"]);
+        for _ in 0..30 {
+            if dev.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
         if !dev.exists() {
             return Err(err(
                 "the XeeonOS installation medium was not found; use --from <directory>",

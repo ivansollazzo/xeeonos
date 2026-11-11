@@ -1,0 +1,4 @@
+# Services enabled by default in XeeonOS. Everything else follows the
+# distribution defaults; keep this list short (principle: on-demand services).
+enable NetworkManager.service
+enable systemd-timesyncd.service

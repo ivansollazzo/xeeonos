@@ -1,0 +1,17 @@
+[package]
+name = "xctl"
+version = "0.1.0"
+edition = "2024"
+description = "The XeeonOS system tool"
+publish = false
+
+# No external crates yet: xctl only uses the Rust standard library, so the
+# image build needs no network access. Dependencies will be added (and
+# vendored) when they bring real value, e.g. `clap` or `zbus`.
+[dependencies]
+
+[profile.release]
+# Small, fast binary: optimize, strip symbols, link-time optimization.
+opt-level = 3
+lto = true
+strip = true

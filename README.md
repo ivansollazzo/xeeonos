@@ -59,6 +59,12 @@ Each UKI carries the verity root hash of its `/usr`. `/etc` starts empty: vendor
 defaults are linked from `/usr/share/factory/etc`, and what the administrator
 writes in `/etc` wins.
 
+## Updates
+
+`xctl update` installs the newest version of the system's channel into the
+free `/usr` slot; it starts at the next restart. Updates are published to
+`ghcr.io/ivansollazzo/xeeonos` and signed. See [docs/updates.md](docs/updates.md).
+
 Every push and pull request runs the same steps in GitHub Actions; the ISO is
 attached to the workflow run as the `xeeonos-iso` artifact.
 

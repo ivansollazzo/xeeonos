@@ -1,0 +1,12 @@
+#!/bin/bash
+# Compile xctl and install it into the image. Runs inside the image's build
+# overlay (with the `rust` package), without network: xctl only uses the
+# Rust standard library, and --locked/--offline make sure it stays that way.
+set -euo pipefail
+
+export CARGO_HOME=/var/tmp/cargo-home
+target=${BUILDDIR:-/var/tmp/xctl-target}
+
+cargo build --release --locked --offline \
+    --manifest-path "$SRCDIR/xctl/Cargo.toml" --target-dir "$target"
+install -Dm0755 "$target/release/xctl" "$DESTDIR/usr/bin/xctl"

@@ -2,10 +2,13 @@ name: Build
 
 # Channel branches: `experimental` now, later `<N>.x/alpha|beta|stable`.
 # Pull requests build and test, but never publish anything.
+# Changes that only touch documentation build nothing.
 on:
   push:
     branches: [experimental, '*.x/alpha', '*.x/beta', '*.x/stable']
+    paths-ignore: ['**.md', 'docs/**']
   pull_request:
+    paths-ignore: ['**.md', 'docs/**']
   workflow_dispatch:
 
 concurrency:
@@ -38,6 +41,17 @@ jobs:
 
       - name: Install mkosi
         uses: systemd/mkosi@v27.1
+
+      # Arch packages downloaded by mkosi, kept between runs: faster builds,
+      # and no dependency on the Arch Linux Archive being quick. The packages
+      # come from a fixed snapshot, so the key only changes with the
+      # configuration (snapshot, package lists).
+      - name: Cache Arch packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mkosi
+          key: mkosi-disk-${{ hashFiles('mkosi.conf', 'mkosi.conf.d/**/mkosi.conf', 'mkosi.profiles/**/mkosi.conf') }}
+          restore-keys: mkosi-disk-
 
       - name: Free disk space (two images are built)
         run: |
@@ -201,6 +215,17 @@ jobs:
 
       - name: Install mkosi
         uses: systemd/mkosi@v27.1
+
+      # Arch packages downloaded by mkosi, kept between runs: faster builds,
+      # and no dependency on the Arch Linux Archive being quick. The packages
+      # come from a fixed snapshot, so the key only changes with the
+      # configuration (snapshot, package lists).
+      - name: Cache Arch packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mkosi
+          key: mkosi-iso-${{ hashFiles('mkosi.conf', 'mkosi.conf.d/**/mkosi.conf', 'mkosi.profiles/**/mkosi.conf') }}
+          restore-keys: mkosi-iso-
 
       - name: Free disk space (two images are built)
         run: |

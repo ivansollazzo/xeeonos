@@ -29,8 +29,13 @@ rm -rf "$root/usr/share/libalpm" "$root/etc/pacman.d" "$root/etc/pacman.conf" \
 # Languages come ready-made (glibc-locales): nothing to generate.
 rm -f "$root/usr/bin/locale-gen" "$root/etc/locale.gen"
 # Arch's identity file (the identity is os-release) and an empty fstab
-# (systemd finds the partitions by itself).
-rm -f "$root/etc/arch-release" "$root/etc/fstab"
+# (systemd finds the partitions by itself). Arch's `filesystem` package also
+# keeps "factory" copies in /usr/share/factory/etc and tmpfiles.d rules that
+# copy them back into /etc at boot: remove those too.
+for f in arch-release fstab; do
+    rm -f "$root/etc/$f" "$root/usr/share/factory/etc/$f"
+    sed -i "\\|/etc/$f\\b|d" "$root"/usr/lib/tmpfiles.d/*.conf
+done
 
 # 3. Files only used to compile programs (development happens in distrobox).
 rm -rf "$root/usr/include" "$root/usr/lib/pkgconfig" "$root/usr/share/pkgconfig"

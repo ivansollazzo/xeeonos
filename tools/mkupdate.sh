@@ -25,7 +25,7 @@ if [[ -e $src/xeeonos_$version.manifest ]]; then
 fi
 for part in "$src/xeeonos_$version".usr-x86-64.*.raw "$src/xeeonos_$version".usr-x86-64-verity.*.raw; do
     [[ -e $part ]] || { echo "missing partition file in $src: $part" >&2; exit 1; }
-    zstd --quiet --force -T0 -10 "$part" -o "$out/$(basename "$part").zst"
+    zstd --quiet --force -T0 -19 --long=27 "$part" -o "$out/$(basename "$part").zst"
 done
 
 (cd "$out" && sha256sum -- xeeonos_* > SHA256SUMS)

@@ -8,6 +8,7 @@ mod channel;
 mod install;
 mod oci;
 mod packages;
+mod recovery;
 mod setup;
 mod status;
 mod update;
@@ -62,12 +63,16 @@ Commands:
                          computer name, first user (runs by itself at the
                          first boot).
   install-system [options]
-                         Install XeeonOS from the live ISO onto a disk.
+                         Install XeeonOS onto a disk, from the live ISO or
+                         from Recovery.
                          The whole disk is erased (you are asked to confirm).
       --disk <device>    The disk, e.g. /dev/sda (asked if not given).
       --from <dir>       Install the version in <dir> instead of the one
                          on the installation medium.
       --yes              Do not ask for confirmation (for automated tests).
+  recovery               Restart into Recovery (asks first). In Recovery,
+                         show the Recovery menu: reinstall, previous version,
+                         network, shell, erase everything, restart.
   help                   Show this help.";
 
 fn main() {
@@ -84,6 +89,7 @@ fn main() {
         "rollback" => boot::rollback(rest),
         "install-system" => install::run_install(rest),
         "packages" => packages::run(rest),
+        "recovery" => recovery::run_recovery(rest),
         "setup" => setup::run_setup(rest),
         "channel" => channel::run(rest),
         "help" | "-h" | "--help" => {

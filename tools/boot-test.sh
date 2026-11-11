@@ -26,6 +26,9 @@
 #                           answers in <file> (credential xeeonos.setup);
 #                           by default the setup is skipped
 #   --cmdline <args>        extra kernel command line arguments
+#   --efivars <file>        keep the UEFI variables in <file> (created if
+#                           missing), so that the next test boot sees them
+#                           (one-shot boot menu choice, factory reset request)
 #   --allow-reboot          let the VM restart (to test the fallback after
 #                           failed boots); by default a restart ends the test
 # Env: TIMEOUT (seconds, default 300), MEMORY (MiB, default 6144),
@@ -39,6 +42,7 @@ extra_cmdline=""
 expect=()
 credentials=()
 http_dir=""
+efivars=""
 no_reboot=(-no-reboot)
 while (( $# )); do
     case $1 in
@@ -49,6 +53,7 @@ while (( $# )); do
         --disk) disk=$2; shift 2 ;;
         --setup) setup=$2; shift 2 ;;
         --cmdline) extra_cmdline=$2; shift 2 ;;
+        --efivars) efivars=$2; shift 2 ;;
         --allow-reboot) no_reboot=(); shift ;;
         -*) echo "unknown option: $1" >&2; exit 2 ;;
         *) break ;;
@@ -63,7 +68,13 @@ ovmf_code=${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}
 ovmf_vars=${OVMF_VARS:-/usr/share/OVMF/OVMF_VARS_4M.fd}
 
 work=$(mktemp -d)
-cp "$ovmf_vars" "$work/vars.fd"
+if [[ -n $efivars ]]; then
+    [[ -e $efivars ]] || cp "$ovmf_vars" "$efivars"
+    vars=$efivars
+else
+    vars=$work/vars.fd
+    cp "$ovmf_vars" "$vars"
+fi
 : > "$log"
 
 accel=tcg
@@ -139,7 +150,7 @@ echo "Booting $image (accel=$accel, ${memory} MiB, timeout ${timeout}s)"
 qemu-system-x86_64 \
     -machine q35,accel="$accel" -cpu max -smp 2 -m "$memory" \
     -drive if=pflash,format=raw,readonly=on,file="$ovmf_code" \
-    -drive if=pflash,format=raw,file="$work/vars.fd" \
+    -drive if=pflash,format=raw,file="$vars" \
     -nic user,model=virtio-net-pci \
     "${media[@]}" \
     -display none -serial file:"$log" "${no_reboot[@]}" &

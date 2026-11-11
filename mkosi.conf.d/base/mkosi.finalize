@@ -13,7 +13,9 @@ mkdir -p "$root/usr/share/xeeonos"
 for pkg in "$db"/*/; do
     name=$(sed -n '/^%NAME%$/{n;p;q}' "$pkg/desc")
     version=$(sed -n '/^%VERSION%$/{n;p;q}' "$pkg/desc")
-    file=$(sed -n '/^%FILES%$/,/^$/{/^%FILES%$/d;/\/$/d;/^$/d;p}' "$pkg/files" 2>/dev/null | head -n1)
+    # The first file (not directory) of the package. awk reads the whole
+    # input: no `| head`, which would break the pipe (exit 141 with pipefail).
+    file=$(awk '/^%FILES%$/ {f=1; next} /^$/ {f=0} f && !/\/$/ && !seen {print; seen=1}' "$pkg/files" 2>/dev/null || true)
     if [[ -z $file || -e $root/$file || -L $root/$file ]]; then
         printf '%s %s\n' "$name" "$version"
     fi

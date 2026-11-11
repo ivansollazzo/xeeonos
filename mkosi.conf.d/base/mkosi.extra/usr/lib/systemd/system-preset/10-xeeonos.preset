@@ -2,3 +2,7 @@
 # distribution defaults; keep this list short (principle: on-demand services).
 enable NetworkManager.service
 enable systemd-timesyncd.service
+# NetworkManager is the network stack; systemd-networkd (enabled by systemd's
+# own presets) would compete with it, and its wait-online service would hang
+# anything that waits for the network.
+disable systemd-networkd*

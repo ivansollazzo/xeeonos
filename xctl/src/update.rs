@@ -171,13 +171,20 @@ fn fetch(source: &Source, dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
     check_hashes(dir)
 }
 
-/// Right after boot the network may still be coming up: give NetworkManager
-/// up to a minute to connect. If it is not installed or times out, go on and
-/// let the download report the error.
+/// Right after boot the network may still be coming up (NetworkManager
+/// itself may not be running yet): wait up to a minute for a connection. If
+/// it never comes, go on and let the download report the error.
 fn wait_for_network() {
-    let _ = std::process::Command::new("nm-online")
-        .args(["--quiet", "--timeout=60"])
-        .status();
+    for _ in 0..30 {
+        let online = std::process::Command::new("nm-online")
+            .args(["--quiet", "--timeout=2"])
+            .status()
+            .is_ok_and(|s| s.success());
+        if online {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
 }
 
 /// Download `url` into the file `to` with curl, retrying on network errors.

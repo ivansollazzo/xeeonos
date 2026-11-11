@@ -10,3 +10,12 @@ VERSION_ID="${version%%-*}"
 PRETTY_NAME="XeeonOS $version"
 BUILD_ID="$(date -u +%Y%m%d)"
 EOS
+
+# The Arch Linux snapshot the packages come from (shown by `xctl status`).
+snapshot=$(sed -n 's/^Snapshot=//p' "$SRCDIR/mkosi.conf")
+echo "XEEONOS_ARCH_SNAPSHOT=\"$snapshot\"" >>"$BUILDROOT/usr/lib/os-release"
+
+# Keep a copy of the package database for mkosi.finalize, which writes the
+# list of packages: mkosi removes pacman and the database before it runs.
+rm -rf "$BUILDROOT/var/tmp/xeeonos-pkgdb"
+cp -a "$BUILDROOT/var/lib/pacman/local" "$BUILDROOT/var/tmp/xeeonos-pkgdb"

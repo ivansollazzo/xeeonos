@@ -1,6 +1,7 @@
 # XeeonOS
 
-XeeonOS is an image-based Linux distribution built on Arch Linux around three principles:
+XeeonOS is an image-based Linux distribution based on the packages of
+[Arch Linux](https://archlinux.org), built around three principles:
 
 - **Immutability**: the system is a sealed, read-only image; updates are atomic, with automatic rollback.
 - **Simplicity**: one way to do each thing, and a system that updates and repairs itself.
@@ -83,6 +84,20 @@ The live system runs entirely from RAM (allow at least 4 GB) and logs in as
 `root` on the console. It does not touch your disks unless you install:
 `xctl install-system` installs XeeonOS on a whole disk, erasing it. See
 [docs/install.md](docs/install.md).
+
+## First boot and Ripristino
+
+At the first boot `xctl setup` asks for the language, keyboard, time zone,
+computer name and the first user ([docs/setup.md](docs/setup.md)). The boot
+menu has a **Ripristino** entry that erases all data and starts again from the
+first boot ([docs/recovery.md](docs/recovery.md)).
+
+## Arch Linux
+
+XeeonOS is built from Arch Linux packages (a dated snapshot of the Arch Linux
+Archive), without Arch's package manager. It is not an official Arch Linux
+product: please report problems with XeeonOS
+[here](https://github.com/ivansollazzo/xeeonos/issues), not to Arch Linux.
 
 ## Roadmap
 

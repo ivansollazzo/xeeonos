@@ -1,11 +1,14 @@
 //! xctl - the XeeonOS system tool.
 //!
-//! Commands: `status`, `update`, `rollback`, `channel`, `install-system`. Each command lives in its own module (file) below.
+//! Commands: `status`, `update`, `rollback`, `channel`, `packages`, `setup`,
+//! `install-system`. Each command lives in its own module (file) below.
 
 mod boot;
 mod channel;
 mod install;
 mod oci;
+mod packages;
+mod setup;
 mod status;
 mod update;
 mod util;
@@ -49,6 +52,11 @@ Commands:
   channel [<name>]       Show the update channel, or switch to <name>:
                          experimental, or <N>.x-alpha, <N>.x-beta, <N>.x-stable.
       --reset            Go back to the channel this version was built for.
+  packages [<name>]      List the packages of this version (and their
+                         versions); with <name>, only those containing it.
+  setup                  First-boot setup: language, keyboard, time zone,
+                         computer name, first user (runs by itself at the
+                         first boot).
   install-system [options]
                          Install XeeonOS from the live ISO onto a disk.
                          The whole disk is erased (you are asked to confirm).
@@ -71,6 +79,8 @@ fn main() {
         "update" => update::run(rest),
         "rollback" => boot::rollback(rest),
         "install-system" => install::run_install(rest),
+        "packages" => packages::run(rest),
+        "setup" => setup::run_setup(rest),
         "channel" => channel::run(rest),
         "help" | "-h" | "--help" => {
             println!("{USAGE}");

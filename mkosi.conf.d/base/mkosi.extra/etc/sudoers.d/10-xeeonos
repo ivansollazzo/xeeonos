@@ -1,0 +1,2 @@
+# Administrators (group wheel, chosen in `xctl setup`) can use sudo.
+%wheel ALL=(ALL:ALL) ALL

@@ -6,12 +6,17 @@
 # (EFI/BOOT/BOOTX64.EFI). The same file boots from a CD/DVD, from a USB stick
 # written with dd/Etcher/Ventoy, and in virtual machines.
 #
-# Usage: tools/mkiso.sh <uki.efi> <output.iso>
+# With a system directory (made by tools/mkupdate.sh), the ISO also carries
+# the system that `xctl install-system` installs, in xeeonos/ on the ISO file
+# system.
+#
+# Usage: tools/mkiso.sh <uki.efi> <output.iso> [system dir]
 # Needs: mkfs.fat (dosfstools), mmd/mcopy (mtools), xorriso.
 set -euo pipefail
 
 uki=${1:?usage: mkiso.sh <uki.efi> <output.iso>}
 out=${2:?usage: mkiso.sh <uki.efi> <output.iso>}
+system=${3:-}
 label=${ISO_LABEL:-XEEONOS}
 
 work=$(mktemp -d)
@@ -29,6 +34,8 @@ mcopy -i "$work/efiboot.img" "$uki" ::/EFI/BOOT/BOOTX64.EFI
 mkdir -p "$work/root"
 # The UKI lives only in the ESP image, so the ISO is not twice its size.
 printf 'XeeonOS live ISO. Boot it in UEFI mode.\n' > "$work/root/README.txt"
+contents=("/=$work/root")
+[[ -n $system ]] && contents+=("/xeeonos/=$system")
 
 xorriso -as mkisofs \
     -iso-level 3 -full-iso9660-filenames -joliet -joliet-long -rational-rock \
@@ -38,6 +45,6 @@ xorriso -as mkisofs \
     -appended_part_as_gpt \
     -e --interval:appended_partition_2:all:: -no-emul-boot \
     -output "$out" \
-    "$work/root"
+    -graft-points "${contents[@]}"
 
 echo "ISO written to $out"

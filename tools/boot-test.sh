@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Boot a XeeonOS image in QEMU (UEFI, no Secure Boot) and check that it works.
 #
-#   *.iso  live ISO: pass when systemd reaches multi-user.target.
+#   *.iso  live ISO: pass when systemd reaches multi-user.target, or, with
+#          --run, run a command after boot and power off.
 #   *.raw  installed-system disk: the disk is grown to DISK_SIZE (the first
 #          boot then creates slot B and the data partition), a command runs
 #          after boot (default: `xctl status --check`) and the VM powers off.
@@ -9,21 +10,26 @@
 #          next step (e.g. after an update).
 #
 # Usage: tools/boot-test.sh [options] <image.iso|image.raw> [serial.log]
-# Options (disk images only, except --expect):
-#   --run <command>         command to run once booted (via systemd.run=)
+# Options:
+#   --run <command>         command to run once booted (via systemd.run=);
+#                           disk images default to `xctl status --check`
 #   --expect <regex>        pattern that must appear on the console; may be
 #                           given several times (all must appear)
 #   --credential <name>=<file>
 #                           pass <file> to the VM as system credential <name>
 #                           (/run/credentials/@system/<name>)
 #   --http <dir>            serve <dir> at http://10.0.2.2:8080/ in the VM
+#   --disk <file>           attach <file> as an extra, blank virtio disk
+#                           (/dev/vda in the live system), created with
+#                           DISK_SIZE if missing: the target of an install
 #   --allow-reboot          let the VM restart (to test the fallback after
 #                           failed boots); by default a restart ends the test
 # Env: TIMEOUT (seconds, default 300), MEMORY (MiB, default 6144),
 #      DISK_SIZE (default 24G), OVMF_CODE / OVMF_VARS (Ubuntu defaults).
 set -euo pipefail
 
-run="/usr/bin/xctl status --check"
+run=""
+disk=""
 expect=()
 credentials=()
 http_dir=""
@@ -34,6 +40,7 @@ while (( $# )); do
         --expect) expect+=("$2"); shift 2 ;;
         --credential) credentials+=("$2"); shift 2 ;;
         --http) http_dir=$2; shift 2 ;;
+        --disk) disk=$2; shift 2 ;;
         --allow-reboot) no_reboot=(); shift ;;
         -*) echo "unknown option: $1" >&2; exit 2 ;;
         *) break ;;
@@ -54,40 +61,58 @@ cp "$ovmf_vars" "$work/vars.fd"
 accel=tcg
 [[ -w /dev/kvm ]] && accel=kvm
 
+# Extra kernel command line for this test only, passed to systemd-stub
+# through SMBIOS (the UKI itself stays untouched): serial console, no
+# interactive first boot, run the command and power off.
+# systemd.run= replaces the normal boot target, so the step that marks a new
+# version as good (systemd-bless-boot, normally pulled in by basic.target) is
+# run explicitly first, when boot counting is active.
+run_media() {
+    local bless cmdline c name file
+    bless="test -e /sys/firmware/efi/efivars/LoaderBootCountPath-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
+    bless+=" || exit 0; systemctl start systemd-bless-boot.service"
+    cmdline="console=ttyS0,115200 systemd.firstboot=no"
+    cmdline+=" systemd.run=\"/bin/sh -c '$bless'\""
+    cmdline+=" systemd.run=\"$run\""
+    cmdline+=" systemd.run_success_action=poweroff systemd.run_failure_action=poweroff"
+    # (QEMU option values escape "," as ",,".)
+    media+=(-smbios "type=11,value=io.systemd.stub.kernel-cmdline-extra=${cmdline//,/,,}")
+    for c in "${credentials[@]}"; do
+        name=${c%%=*} file=${c#*=}
+        media+=(-smbios "type=11,value=io.systemd.credential.binary:$name=$(base64 -w0 "$file")")
+    done
+}
+
 case $image in
     *.iso)
         media=(-cdrom "$image")
-        (( ${#expect[@]} )) || expect=("Reached target.*Multi-User System")
+        if [[ -n $run ]]; then
+            run_media
+        else
+            (( ${#expect[@]} )) || expect=("Reached target.*Multi-User System")
+        fi
         ;;
     *.raw)
         # Growing to the same size again is a no-op, so repeated boots are fine.
         truncate --size="${DISK_SIZE:-24G}" "$image"
         media=(-drive "if=virtio,format=raw,file=$image")
+        [[ -n $run ]] || run="/usr/bin/xctl status --check"
         (( ${#expect[@]} )) || expect=("check: sealed system OK")
-        # Extra kernel command line for this test only, passed to systemd-stub
-        # through SMBIOS (the UKI itself stays untouched): serial console, no
-        # interactive first boot, run the command and power off.
-        # systemd.run= replaces the normal boot target, so the step that marks
-        # a new version as good (systemd-bless-boot, normally pulled in by
-        # basic.target) is run explicitly first, when boot counting is active.
-        bless="test -e /sys/firmware/efi/efivars/LoaderBootCountPath-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
-        bless+=" || exit 0; systemctl start systemd-bless-boot.service"
-        cmdline="console=ttyS0,115200 systemd.firstboot=no"
-        cmdline+=" systemd.run=\"/bin/sh -c '$bless'\""
-        cmdline+=" systemd.run=\"$run\""
-        cmdline+=" systemd.run_success_action=poweroff systemd.run_failure_action=poweroff"
-        # (QEMU option values escape "," as ",,".)
-        media+=(-smbios "type=11,value=io.systemd.stub.kernel-cmdline-extra=${cmdline//,/,,}")
-        for c in "${credentials[@]}"; do
-            name=${c%%=*} file=${c#*=}
-            media+=(-smbios "type=11,value=io.systemd.credential.binary:$name=$(base64 -w0 "$file")")
-        done
+        run_media
         ;;
     *)
         echo "Unknown image type: $image" >&2
         exit 2
         ;;
 esac
+
+(( ${#expect[@]} )) || { echo "--run on a live ISO needs --expect" >&2; exit 2; }
+
+if [[ -n $disk ]]; then
+    [[ -e $disk ]] || truncate --size="${DISK_SIZE:-24G}" "$disk"
+    # detect-zeroes: blocks of zeros written by the installer stay sparse.
+    media+=(-drive "if=virtio,format=raw,discard=unmap,detect-zeroes=unmap,file=$disk")
+fi
 
 pids=()
 if [[ -n $http_dir ]]; then

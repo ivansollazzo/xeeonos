@@ -70,8 +70,12 @@ A new version gets 3 attempts to start; if they all fail, the previous version
 starts again by itself. `xctl rollback` goes back on request. See
 [docs/rollback.md](docs/rollback.md).
 
-Every push and pull request runs the same steps in GitHub Actions; the ISO is
-attached to the workflow run as the `xeeonos-iso` artifact.
+Every push and pull request runs the same chain of jobs in GitHub Actions,
+each starting only if the previous one passed: `xctl` (format, lint, unit
+tests) → build (system, next version, live image: built once) → disk tests
+(first boot, A/B update, rollback, setup, Ripristino) → ISO (pack, boot,
+install) → publish (channel branches only). The ISO is attached to the
+workflow run as the `xeeonos-iso` artifact.
 
 ## Trying the ISO
 

@@ -12,6 +12,14 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+# The jobs form a chain: each one starts only if the previous one passed.
+#
+#   xctl -> build -> disk tests -> ISO -> publish (channel branches only)
+#
+# Everything is built once, in `build`; the test jobs use what it built
+# (artifacts of this run, kept 3 days), so a failed test can be re-run on its
+# own in a few minutes. Every run builds from scratch: nothing is shared
+# between runs or pull requests.
 jobs:
   xctl:
     name: xctl (format, lint, unit tests)
@@ -26,23 +34,93 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
 
-  disk:
-    name: Build disk image, test first boot, A/B update and rollback
+  build:
+    name: Build system, next version and live image
+    needs: xctl
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
 
       - name: Install mkosi
         uses: systemd/mkosi@v27.1
 
-      - name: Free disk space (two images are built)
+      - name: Free disk space (three images are built)
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get update
+          sudo apt-get install --assume-yes --no-install-recommends zstd
           df -h /
+
+      - name: Compute version
+        run: |
+          echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
+          # The "next" version, built only to test updating to it.
+          echo "NEXT=$(tools/version.sh).1" >> "$GITHUB_ENV"
+
+      # The system: the full disk image (first-boot tests) and its update
+      # files (installed by the ISO, published on channel branches).
+      - name: Build the system
+        run: |
+          mkdir -p mkosi.cache out/disk-image
+          mkosi --force --image-version="$VERSION" build
+          ls -lhs mkosi.output/
+          zstd -T0 --quiet "mkosi.output/xeeonos_$VERSION.raw" -o "out/disk-image/xeeonos_$VERSION.raw.zst"
+          tools/mkupdate.sh mkosi.output "$VERSION" out/update-system
+          rm -rf mkosi.output
+
+      - name: Build the next version (for the update test)
+        run: |
+          mkosi --force --image-version="$NEXT" build
+          tools/mkupdate.sh mkosi.output "$NEXT" out/update-next
+          rm -rf mkosi.output
+
+      - name: Build the live image (UKI)
+        run: |
+          mkosi --force --profile=live --image-version="$VERSION" build
+          mkdir -p out/live
+          mv "mkosi.output/xeeonos_$VERSION.efi" out/live/
+          rm -rf mkosi.output
+          ls -lhR out/
+
+      - name: Upload the disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: disk-image
+          path: out/disk-image/
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload the system update files
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-system
+          path: out/update-system/
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload the next version's update files
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-next
+          path: out/update-next/
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload the live image
+        uses: actions/upload-artifact@v4
+        with:
+          name: live
+          path: out/live/
+          retention-days: 3
+
+  disk:
+    name: Test first boot, A/B update, rollback, setup and Ripristino
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Install VM tools
         run: |
@@ -52,44 +130,38 @@ jobs:
       - name: Compute version
         run: |
           echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
-          echo "CHANNEL=$(tools/version.sh --channel)" >> "$GITHUB_ENV"
-          # The "next" version, built only to test updating to it, and a
-          # broken one after it, to test the automatic fallback.
           echo "NEXT=$(tools/version.sh).1" >> "$GITHUB_ENV"
+          # A broken version after the next one, to test the automatic fallback.
           echo "BROKEN=$(tools/version.sh).2" >> "$GITHUB_ENV"
 
-      - name: Build disk image
-        run: |
-          mkdir -p mkosi.cache
-          mkosi --force --image-version="$VERSION" build
-          ls -lhs mkosi.output/
+      - name: Download the disk image and the next version
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '{disk-image,update-next}'
+          path: build
 
-      - name: Build next version (for the update test)
-        run: |
-          mkosi --force --image-version="$NEXT" --output-directory=mkosi.output/next build
-          ls -lhs mkosi.output/next/
-
-      - name: Create a throwaway signing key for the tests
+      - name: Create a throwaway signing key, sign the next version
         run: |
           export GNUPGHOME=$RUNNER_TEMP/test-gnupg
           mkdir -m 700 "$GNUPGHOME"
           gpg --batch --passphrase '' --quick-gen-key "XeeonOS CI test key" ed25519 sign 1d
           gpg --export > "$RUNNER_TEMP/test-keyring.gpg"
+          gpg --batch --yes --local-user "XeeonOS CI test key" --detach-sign \
+            --output build/update-next/SHA256SUMS.gpg build/update-next/SHA256SUMS
 
       - name: "Test 1: first boot, sealed /usr"
         run: |
           mkdir -p out
-          mv "mkosi.output/xeeonos_$VERSION.raw" out/disk.raw
+          zstd -d --sparse --quiet "build/disk-image/xeeonos_$VERSION.raw.zst" -o out/disk.raw
+          rm -rf build/disk-image
           tools/boot-test.sh out/disk.raw out/serial-1-firstboot.log
 
       - name: "Test 2: update to the next version over HTTP"
         # systemd.run= replaces the boot target, so the normal services
         # (network included) are not started: start the network first.
         run: |
-          GNUPGHOME=$RUNNER_TEMP/test-gnupg SIGNING_KEY="XeeonOS CI test key" \
-            tools/mkupdate.sh mkosi.output/next "$NEXT" out/update-next
           tools/boot-test.sh \
-            --http out/update-next \
+            --http build/update-next \
             --credential "xctl.keyring=$RUNNER_TEMP/test-keyring.gpg" \
             --run "/bin/sh -c 'systemctl start network-online.target && /usr/bin/xctl update --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring'" \
             --expect "XeeonOS $NEXT is installed" \
@@ -128,10 +200,10 @@ jobs:
         run: |
           src=out/broken-src
           mkdir -p "$src"
-          cp "mkosi.output/next/xeeonos_$NEXT.efi" "$src/xeeonos_$BROKEN.efi"
-          for f in mkosi.output/next/xeeonos_"$NEXT".usr-*.raw; do
-            name=$(basename "$f")
-            cp --sparse=always "$f" "$src/xeeonos_$BROKEN${name#xeeonos_$NEXT}"
+          cp "build/update-next/xeeonos_$NEXT.efi" "$src/xeeonos_$BROKEN.efi"
+          for f in build/update-next/xeeonos_"$NEXT".usr-*.raw.zst; do
+            name=$(basename "$f" .zst)
+            zstd -d --sparse --quiet "$f" -o "$src/xeeonos_$BROKEN${name#xeeonos_$NEXT}"
           done
           dd if=/dev/urandom of="$(echo "$src"/xeeonos_"$BROKEN".usr-x86-64.*.raw)" \
             bs=1M count=1 conv=notrunc
@@ -193,49 +265,13 @@ jobs:
           path: out/serial-*.log
           if-no-files-found: ignore
 
-      # Publishing: only for pushes to a channel branch, and only once the
-      # signing key exists in the repository secrets (XEEONOS_SIGNING_KEY,
-      # an armored GnuPG secret key without passphrase).
-      - name: Publish update to ghcr.io
-        if: github.event_name == 'push' && env.CHANNEL != ''
-        env:
-          SIGNING_KEY_ARMORED: ${{ secrets.XEEONOS_SIGNING_KEY }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [[ -z $SIGNING_KEY_ARMORED ]]; then
-            echo "::warning::XEEONOS_SIGNING_KEY is not set: update not published"
-            exit 0
-          fi
-          export GNUPGHOME=$RUNNER_TEMP/release-gnupg
-          mkdir -m 700 "$GNUPGHOME"
-          gpg --batch --import <<< "$SIGNING_KEY_ARMORED"
-          key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
-          SIGNING_KEY=$key tools/mkupdate.sh mkosi.output "$VERSION" out/update
-
-          curl -sSL https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_amd64.tar.gz |
-            tar -xz -C "$RUNNER_TEMP" oras
-          oras=$RUNNER_TEMP/oras
-          repo=ghcr.io/${GITHUB_REPOSITORY,,}
-          "$oras" login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<< "$GH_TOKEN"
-          cd out/update
-          "$oras" push "$repo:$VERSION" --artifact-type application/vnd.xeeonos.update.v1 ./*
-          "$oras" tag "$repo:$VERSION" "$CHANNEL"
-          echo "Published $repo:$VERSION (channel $CHANNEL)" >> "$GITHUB_STEP_SUMMARY"
-
   iso:
-    name: Build live ISO, test boot and installation
+    name: Pack live ISO, test boot and installation
+    needs: disk
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install mkosi
-        uses: systemd/mkosi@v27.1
-
-      - name: Free disk space (two images are built)
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
 
       - name: Install ISO and VM tools
         run: |
@@ -246,22 +282,17 @@ jobs:
       - name: Compute version
         run: echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
 
-      # The ISO carries the installed system: the same files as an update.
-      - name: Build the system to install
-        run: |
-          mkdir -p mkosi.cache out
-          mkosi --force --image-version="$VERSION" --output-directory=mkosi.output/system build
-          tools/mkupdate.sh mkosi.output/system "$VERSION" out/system
-          rm -rf mkosi.output/system
+      - name: Download the live image and the system to install
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '{live,update-system}'
+          path: build
 
-      - name: Build live image (UKI)
-        run: |
-          mkosi --force --profile=live --image-version="$VERSION" build
-          ls -lh mkosi.output/
-
+      # The ISO carries the system to install: the same files as an update.
       - name: Pack ISO
         run: |
-          tools/mkiso.sh "mkosi.output/xeeonos_$VERSION.efi" "out/xeeonos-$VERSION.iso" out/system
+          mkdir -p out
+          tools/mkiso.sh "build/live/xeeonos_$VERSION.efi" "out/xeeonos-$VERSION.iso" build/update-system
           ls -lh out/
 
       - name: "Test 1: the live system boots"
@@ -290,11 +321,64 @@ jobs:
           name: xeeonos-iso
           path: out/*.iso
           retention-days: 14
+          compression-level: 0
 
-      - name: Upload boot log
+      - name: Upload boot logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: serial-logs-live
           path: out/serial-*.log
           if-no-files-found: ignore
+
+  # Publishing: only for pushes to a channel branch, after every test passed,
+  # and only once the signing key exists in the repository secrets
+  # (XEEONOS_SIGNING_KEY, an armored GnuPG secret key without passphrase).
+  publish:
+    name: Publish update to ghcr.io
+    needs: iso
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute version
+        run: |
+          echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
+          echo "CHANNEL=$(tools/version.sh --channel)" >> "$GITHUB_ENV"
+
+      - name: Download the system update files
+        uses: actions/download-artifact@v4
+        with:
+          name: update-system
+          path: out/update
+
+      - name: Sign and push
+        if: env.CHANNEL != ''
+        env:
+          SIGNING_KEY_ARMORED: ${{ secrets.XEEONOS_SIGNING_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -z $SIGNING_KEY_ARMORED ]]; then
+            echo "::warning::XEEONOS_SIGNING_KEY is not set: update not published"
+            exit 0
+          fi
+          export GNUPGHOME=$RUNNER_TEMP/release-gnupg
+          mkdir -m 700 "$GNUPGHOME"
+          gpg --batch --import <<< "$SIGNING_KEY_ARMORED"
+          key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
+          gpg --batch --yes --local-user "$key" --detach-sign \
+            --output out/update/SHA256SUMS.gpg out/update/SHA256SUMS
+
+          curl -sSL https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_amd64.tar.gz |
+            tar -xz -C "$RUNNER_TEMP" oras
+          oras=$RUNNER_TEMP/oras
+          repo=ghcr.io/${GITHUB_REPOSITORY,,}
+          "$oras" login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<< "$GH_TOKEN"
+          cd out/update
+          "$oras" push "$repo:$VERSION" --artifact-type application/vnd.xeeonos.update.v1 ./*
+          "$oras" tag "$repo:$VERSION" "$CHANNEL"
+          echo "Published $repo:$VERSION (channel $CHANNEL)" >> "$GITHUB_STEP_SUMMARY"

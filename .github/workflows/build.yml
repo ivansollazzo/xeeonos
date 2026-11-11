@@ -1,0 +1,58 @@
+name: Build
+
+on:
+  push:
+    branches: [experimental, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iso:
+    name: Build ISO and test boot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mkosi
+        uses: systemd/mkosi@v27.1
+
+      - name: Install ISO and VM tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --assume-yes --no-install-recommends \
+            dosfstools mtools xorriso qemu-system-x86 ovmf
+
+      - name: Build image (UKI)
+        run: mkosi --force build
+
+      - name: Pack ISO
+        run: |
+          uki=$(ls -t mkosi.output/*.efi | head -n 1)
+          ls -lh "$uki"
+          mkdir -p out
+          tools/mkiso.sh "$uki" "out/xeeonos-experimental-$(date -u +%Y%m%d)-${GITHUB_SHA::7}.iso"
+          ls -lh out/
+
+      - name: Boot test in QEMU
+        run: tools/boot-test.sh out/*.iso out/serial.log
+
+      - name: Upload ISO
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xeeonos-iso
+          path: out/*.iso
+          retention-days: 14
+
+      - name: Upload boot log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: serial-log
+          path: out/serial.log
+          if-no-files-found: ignore

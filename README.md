@@ -17,6 +17,12 @@ XeeonOS is an image-based Linux distribution built on Arch Linux around three pr
 
 Work happens on feature branches merged into `experimental` through pull requests.
 
+## Modules
+
+XeeonOS is assembled from independent modules: core modules in `mkosi.conf.d/`
+are always included, optional ones in `mkosi.profiles/` are picked with
+`mkosi --profile=...`. See [docs/modules.md](docs/modules.md).
+
 ## Building
 
 XeeonOS is built with [mkosi](https://github.com/systemd/mkosi) (v27.1) from a dated

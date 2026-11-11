@@ -1,0 +1,8 @@
+# mkosi
+mkosi.output/
+mkosi.cache/
+mkosi.tools/
+mkosi.workspace/
+# build artifacts
+out/
+*.iso

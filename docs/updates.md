@@ -72,4 +72,4 @@ Images built before step 2 carry no key and can only be updated with
 
 CI builds every change twice (version N and N+1), boots N, updates it to N+1
 over HTTP with a throwaway key, and boots again to check that N+1 runs from
-the other slot.
+the other slot. Rollback tests follow (see [rollback.md](rollback.md)).

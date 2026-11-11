@@ -19,9 +19,14 @@ snapshot, output, tools tree) stay in the top-level `mkosi.conf`.
 | Module | Kind | Purpose |
 | --- | --- | --- |
 | `base` | core | Kernel, firmware, systemd, NetworkManager, XeeonOS identity and version |
-| `system` | core | Sealed disk: ESP, A/B `/usr` slots (erofs + dm-verity), Btrfs data partition, hermetic `/etc`, sysupdate definitions |
-| `xctl` | core | The `xctl` system tool (Rust, source in `xctl/`): status, update, channel |
+| `system` | core | Sealed disk: ESP, A/B `/usr` slots (erofs + dm-verity), Btrfs data partition, hermetic `/etc`, sysupdate definitions, boot health check |
+| `xctl` | core | The `xctl` system tool (Rust, source in `xctl/`): status, update, rollback, channel |
 | `live` | optional | Live ISO: UKI running from RAM, root autologin; replaces `system` |
+
+The initrd built into every kernel image is configured in the top-level
+`mkosi.initrd.conf/` (mkosi only reads it there): it restarts instead of
+stopping at an emergency shell while a new version is on trial (see
+[rollback.md](rollback.md)).
 
 ## Variants
 

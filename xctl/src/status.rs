@@ -1,5 +1,6 @@
 //! `xctl status`: what is running, and is the system sealed?
 
+use crate::boot;
 use crate::channel;
 use crate::config;
 use crate::util::{Result, err, output_opt};
@@ -76,6 +77,21 @@ pub fn run(check: bool) -> Result<()> {
                 ""
             };
             println!("  /dev/{}  {label}{mark}", slot.device);
+        }
+    }
+
+    // The boot menu: one kernel per version, with its boot-counting state.
+    if let Ok(entries) = boot::entries(&boot::esp()) {
+        println!("Boot menu (newest first):");
+        let width = entries.iter().map(|e| e.version.len()).max().unwrap_or(0);
+        for e in &entries {
+            let running = if e.version == version {
+                ", running"
+            } else {
+                ""
+            };
+            // `{:<width$}` pads the version to the same width on every line.
+            println!("  {:<width$}  {}{running}", e.version, e.state());
         }
     }
 

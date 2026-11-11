@@ -193,38 +193,65 @@ jobs:
           echo "Published $repo:$VERSION (channel $CHANNEL)" >> "$GITHUB_STEP_SUMMARY"
 
   iso:
-    name: Build live ISO and test boot
+    name: Build live ISO, test boot and installation
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
       - name: Install mkosi
         uses: systemd/mkosi@v27.1
 
+      - name: Free disk space (two images are built)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - name: Install ISO and VM tools
         run: |
           sudo apt-get update
           sudo apt-get install --assume-yes --no-install-recommends \
-            dosfstools mtools xorriso qemu-system-x86 ovmf
+            dosfstools mtools xorriso qemu-system-x86 ovmf zstd
 
       - name: Compute version
         run: echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
 
+      # The ISO carries the installed system: the same files as an update.
+      - name: Build the system to install
+        run: |
+          mkdir -p mkosi.cache out
+          mkosi --force --image-version="$VERSION" --output-directory=mkosi.output/system build
+          tools/mkupdate.sh mkosi.output/system "$VERSION" out/system
+          rm -rf mkosi.output/system
+
       - name: Build live image (UKI)
         run: |
-          mkdir -p mkosi.cache
           mkosi --force --profile=live --image-version="$VERSION" build
           ls -lh mkosi.output/
 
       - name: Pack ISO
         run: |
-          mkdir -p out
-          tools/mkiso.sh "mkosi.output/xeeonos_$VERSION.efi" "out/xeeonos-$VERSION.iso"
+          tools/mkiso.sh "mkosi.output/xeeonos_$VERSION.efi" "out/xeeonos-$VERSION.iso" out/system
           ls -lh out/
 
-      - name: Boot test in QEMU
+      - name: "Test 1: the live system boots"
         run: tools/boot-test.sh "out/xeeonos-$VERSION.iso" out/serial-live.log
+
+      - name: "Test 2: install on a blank disk"
+        run: |
+          tools/boot-test.sh \
+            --disk out/target.raw \
+            --run "/usr/bin/xctl install-system --disk /dev/vda --yes" \
+            --expect "XeeonOS $VERSION is installed on /dev/vda" \
+            "out/xeeonos-$VERSION.iso" out/serial-install.log
+
+      - name: "Test 3: the installed system boots"
+        run: |
+          tools/boot-test.sh \
+            --expect "XeeonOS $VERSION \(build" \
+            --expect "check: sealed system OK" \
+            out/target.raw out/serial-installed.log
+          rm out/target.raw
 
       - name: Upload ISO
         if: success()
@@ -238,6 +265,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: serial-log-live
-          path: out/serial-live.log
+          name: serial-logs-live
+          path: out/serial-*.log
           if-no-files-found: ignore

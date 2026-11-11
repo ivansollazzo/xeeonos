@@ -298,7 +298,7 @@ fn verify_signature(dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
 }
 
 /// Check every file against the (already verified) manifest.
-fn check_hashes(dir: &Path) -> Result<()> {
+pub(crate) fn check_hashes(dir: &Path) -> Result<()> {
     let ok = Command::new("sha256sum")
         .args(["--check", "--strict", "--quiet", "SHA256SUMS"])
         .current_dir(dir)
@@ -315,7 +315,7 @@ fn check_hashes(dir: &Path) -> Result<()> {
 }
 
 /// The newest version among the kernels (xeeonos_<v>.efi) in `dir`.
-fn newest_version(dir: &Path) -> Result<Option<String>> {
+pub(crate) fn newest_version(dir: &Path) -> Result<Option<String>> {
     let mut names = Vec::new();
     for entry in fs::read_dir(dir)? {
         names.push(entry?.file_name().to_string_lossy().into_owned());

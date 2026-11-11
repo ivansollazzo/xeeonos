@@ -79,8 +79,10 @@ attached to the workflow run as the `xeeonos-iso` artifact.
 - **USB stick**: write it with `dd`, Etcher or Ventoy, then pick the stick from your
   PC's boot menu. Secure Boot must be disabled for now.
 
-The Phase 0 live system runs entirely from RAM (allow at least 4 GB) and logs in
-as `root` on the console. It does not touch your disks.
+The live system runs entirely from RAM (allow at least 4 GB) and logs in as
+`root` on the console. It does not touch your disks unless you install:
+`xctl install-system` installs XeeonOS on a whole disk, erasing it. See
+[docs/install.md](docs/install.md).
 
 ## Roadmap
 

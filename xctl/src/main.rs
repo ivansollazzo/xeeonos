@@ -26,6 +26,10 @@ mod config {
     /// The channel chosen by the administrator, if any.
     pub const CHANNEL_FILE: &str = "/etc/xeeonos/channel";
     pub const OS_RELEASE: &str = "/usr/lib/os-release";
+    /// Present only in the live ISO (mkosi.profiles/live).
+    pub const LIVE_MARKER: &str = "/usr/lib/xeeonos/live";
+    /// Kernel command line word of the Recovery boot entry.
+    pub const RECOVERY_CMDLINE: &str = "xeeonos.recovery";
     pub const SYSUPDATE: &str = "/usr/lib/systemd/systemd-sysupdate";
     /// GPT partition type of /usr on x86-64 (Discoverable Partitions Specification).
     pub const USR_PARTITION_TYPE: &str = "8484680c-9521-48c6-9c11-b0720656f69e";

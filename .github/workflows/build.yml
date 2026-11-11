@@ -233,7 +233,7 @@ jobs:
             "fullname=Test User" password=test-password admin=yes > out/setup.txt
           tools/boot-test.sh \
             --setup out/setup.txt \
-            --run "/bin/sh -c 'id -nG test; cat /etc/locale.conf /etc/vconsole.conf; test -e /usr/bin/pacman || echo NO-PACMAN; locale -a | grep -q de_DE.utf8 && echo HAS-GERMAN; xctl packages systemd-libs; xctl status --check'" \
+            --run "/bin/sh -c 'id -nG test; cat /etc/locale.conf /etc/vconsole.conf; test -e /usr/bin/pacman || echo NO-PACMAN; locale -a | grep -q de_DE.utf8 && echo HAS-GERMAN; xctl packages systemd-libs; xctl install-system --disk /dev/vda --yes; xctl status --check'" \
             --expect "XeeonOS setup: created user test \(administrator\)" \
             --expect "test wheel" \
             --expect "LANG=it_IT.UTF-8" \
@@ -241,6 +241,7 @@ jobs:
             --expect "NO-PACMAN" \
             --expect "HAS-GERMAN" \
             --expect "systemd-libs [0-9]" \
+            --expect "already installed and running here" \
             --expect "Based on: +Arch Linux \(snapshot " \
             --expect "check: sealed system OK" \
             out/disk.raw out/serial-8-setup.log

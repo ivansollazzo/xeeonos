@@ -65,6 +65,10 @@ writes in `/etc` wins.
 free `/usr` slot; it starts at the next restart. Updates are published to
 `ghcr.io/ivansollazzo/xeeonos` and signed. See [docs/updates.md](docs/updates.md).
 
+A new version gets 3 attempts to start; if they all fail, the previous version
+starts again by itself. `xctl rollback` goes back on request. See
+[docs/rollback.md](docs/rollback.md).
+
 Every push and pull request runs the same steps in GitHub Actions; the ISO is
 attached to the workflow run as the `xeeonos-iso` artifact.
 

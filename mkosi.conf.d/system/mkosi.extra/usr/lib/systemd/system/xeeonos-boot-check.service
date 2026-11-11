@@ -1,0 +1,17 @@
+# Health check of a new version: the boot only counts as successful (and the
+# boot counter is removed by systemd-bless-boot) if the system is sealed:
+# /usr read-only and verity-protected, Btrfs data partition, two /usr slots.
+# If it fails, the version stays "on trial" and after its last attempt
+# systemd-boot goes back to the previous version. See docs/rollback.md.
+[Unit]
+Description=Check that XeeonOS started correctly
+After=local-fs.target
+Before=boot-complete.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/xctl status --check
+
+[Install]
+RequiredBy=boot-complete.target

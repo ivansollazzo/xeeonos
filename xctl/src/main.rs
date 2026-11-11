@@ -1,8 +1,9 @@
 //! xctl - the XeeonOS system tool.
 //!
-//! Commands: `status`, `update`, `channel`. Rollback and the installer come
+//! Commands: `status`, `update`, `rollback`, `channel`. The installer comes
 //! next. Each command lives in its own module (file) below.
 
+mod boot;
 mod channel;
 mod oci;
 mod status;
@@ -42,6 +43,9 @@ Commands:
                          a directory (e.g. a USB stick), an http(s) URL of a
                          directory, or oci://<registry>/<name>:<tag>.
       --keyring <file>   Also accept updates signed by the keys in <file>.
+  rollback               Go back to the previous version at the next restart.
+                         The running version is marked as bad and will not
+                         be started (or installed) again.
   channel [<name>]       Show the update channel, or switch to <name>:
                          experimental, or <N>.x-alpha, <N>.x-beta, <N>.x-stable.
       --reset            Go back to the channel this version was built for.
@@ -58,6 +62,7 @@ fn main() {
     let result = match command {
         "status" => status::run(rest.first().is_some_and(|a| a == "--check")),
         "update" => update::run(rest),
+        "rollback" => boot::rollback(rest),
         "channel" => channel::run(rest),
         "help" | "-h" | "--help" => {
             println!("{USAGE}");

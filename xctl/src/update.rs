@@ -17,6 +17,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::boot;
 use crate::channel;
 use crate::config;
 use crate::oci;
@@ -105,6 +106,14 @@ pub fn run(args: &[String]) -> Result<()> {
             return Ok(());
         }
         Ordering::Greater => {}
+    }
+    // A version that already failed to start here (or was rolled back) is
+    // not installed again: wait for a newer one.
+    if boot::bad_versions().contains(&new) {
+        println!(
+            "XeeonOS {new} did not work on this computer and was disabled: waiting for a newer version."
+        );
+        return Ok(());
     }
 
     println!("Installing XeeonOS {new} (running: {current})...");

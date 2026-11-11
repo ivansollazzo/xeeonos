@@ -1,4 +1,6 @@
 # The kernel goes last: a version only becomes bootable once its /usr is in place.
+# It is installed with a boot counter (xeeonos_<v>+3-0.efi): 3 attempts to
+# start; if all fail, systemd-boot goes back to the previous version.
 [Transfer]
 ProtectVersion=%A
 
@@ -11,6 +13,10 @@ MatchPattern=xeeonos_@v.efi
 Type=regular-file
 Path=/EFI/Linux
 PathRelativeTo=boot
-MatchPattern=xeeonos_@v.efi
+MatchPattern=xeeonos_@v+@l-@d.efi \
+             xeeonos_@v+@l.efi \
+             xeeonos_@v.efi
+TriesLeft=3
+TriesDone=0
 Mode=0644
 InstancesMax=2

@@ -27,7 +27,7 @@ jobs:
       - run: cargo test --locked
 
   disk:
-    name: Build disk image, test first boot and A/B update
+    name: Build disk image, test first boot, A/B update and rollback
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
@@ -53,8 +53,10 @@ jobs:
         run: |
           echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
           echo "CHANNEL=$(tools/version.sh --channel)" >> "$GITHUB_ENV"
-          # The "next" version, built only to test updating to it.
+          # The "next" version, built only to test updating to it, and a
+          # broken one after it, to test the automatic fallback.
           echo "NEXT=$(tools/version.sh).1" >> "$GITHUB_ENV"
+          echo "BROKEN=$(tools/version.sh).2" >> "$GITHUB_ENV"
 
       - name: Build disk image
         run: |
@@ -99,8 +101,59 @@ jobs:
             --expect "XeeonOS $NEXT \(build" \
             --expect "xeeonos_$NEXT  \(running\)" \
             --expect "xeeonos_${VERSION}[[:space:]]*\$" \
+            --expect "$NEXT +good, running" \
             --expect "check: sealed system OK" \
             out/disk.raw out/serial-3-after-update.log
+
+      - name: "Test 4: xctl rollback"
+        run: |
+          tools/boot-test.sh \
+            --run "/usr/bin/xctl rollback" \
+            --expect "XeeonOS $NEXT is disabled. Restart to go back to XeeonOS $VERSION\." \
+            out/disk.raw out/serial-4-rollback.log
+
+      - name: "Test 5: the previous version boots again"
+        run: |
+          tools/boot-test.sh \
+            --expect "XeeonOS $VERSION \(build" \
+            --expect "$VERSION +good, running" \
+            --expect "$NEXT +bad" \
+            --expect "check: sealed system OK" \
+            out/disk.raw out/serial-5-after-rollback.log
+
+      - name: "Test 6: install a broken version"
+        # The next version under a newer number, with the start of its /usr
+        # overwritten: it installs fine (the files match the signed manifest)
+        # but cannot start, because dm-verity refuses the damaged blocks.
+        run: |
+          src=out/broken-src
+          mkdir -p "$src"
+          cp "mkosi.output/next/xeeonos_$NEXT.efi" "$src/xeeonos_$BROKEN.efi"
+          for f in mkosi.output/next/xeeonos_"$NEXT".usr-*.raw; do
+            name=$(basename "$f")
+            cp --sparse=always "$f" "$src/xeeonos_$BROKEN${name#xeeonos_$NEXT}"
+          done
+          dd if=/dev/urandom of="$(echo "$src"/xeeonos_"$BROKEN".usr-x86-64.*.raw)" \
+            bs=1M count=1 conv=notrunc
+          GNUPGHOME=$RUNNER_TEMP/test-gnupg SIGNING_KEY="XeeonOS CI test key" \
+            tools/mkupdate.sh "$src" "$BROKEN" out/update-broken
+          rm -rf "$src"
+          tools/boot-test.sh \
+            --http out/update-broken \
+            --credential "xctl.keyring=$RUNNER_TEMP/test-keyring.gpg" \
+            --run "/bin/sh -c 'systemctl start network-online.target && /usr/bin/xctl update --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring'" \
+            --expect "XeeonOS $BROKEN is installed" \
+            out/disk.raw out/serial-6-update-broken.log
+
+      - name: "Test 7: after 3 failed attempts, the previous version starts"
+        run: |
+          TIMEOUT=900 tools/boot-test.sh --allow-reboot \
+            --expect "XeeonOS: this version failed to start; restarting" \
+            --expect "XeeonOS $VERSION \(build" \
+            --expect "$VERSION +good, running" \
+            --expect "$BROKEN +bad" \
+            --expect "check: sealed system OK" \
+            out/disk.raw out/serial-7-fallback.log
 
       - name: Upload boot logs
         if: always()

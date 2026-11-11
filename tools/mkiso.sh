@@ -27,7 +27,8 @@ mmd -i "$work/efiboot.img" ::/EFI ::/EFI/BOOT
 mcopy -i "$work/efiboot.img" "$uki" ::/EFI/BOOT/BOOTX64.EFI
 
 mkdir -p "$work/root"
-cp "$uki" "$work/root/xeeonos.efi"
+# The UKI lives only in the ESP image, so the ISO is not twice its size.
+printf 'XeeonOS live ISO. Boot it in UEFI mode.\n' > "$work/root/README.txt"
 
 xorriso -as mkisofs \
     -iso-level 3 -full-iso9660-filenames -joliet -joliet-long -rational-rock \

@@ -115,7 +115,7 @@ jobs:
           retention-days: 3
 
   disk:
-    name: Test first boot, A/B update, rollback, setup and Ripristino
+    name: Test first boot, A/B update, rollback, setup and Recovery
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -245,14 +245,14 @@ jobs:
             --expect "check: sealed system OK" \
             out/disk.raw out/serial-8-setup.log
 
-      - name: "Test 9: Ripristino (factory reset)"
-        # The boot menu has a Ripristino entry for each version; booting with
+      - name: "Test 9: Recovery (factory reset)"
+        # The boot menu has a Recovery entry for each version; booting with
         # its command line erases the data partition (the user is gone).
         run: |
           tools/boot-test.sh \
             --cmdline systemd.factory_reset=1 \
-            --run "/bin/sh -c 'bootctl list | grep -i ripristino; id test || echo USER-GONE; xctl status --check'" \
-            --expect "Ripristino" \
+            --run "/bin/sh -c 'bootctl list | grep -i recovery; id test || echo USER-GONE; xctl status --check'" \
+            --expect "Recovery" \
             --expect "USER-GONE" \
             --expect "check: sealed system OK" \
             out/disk.raw out/serial-9-reset.log

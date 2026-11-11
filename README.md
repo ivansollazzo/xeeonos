@@ -73,7 +73,7 @@ starts again by itself. `xctl rollback` goes back on request. See
 Every push and pull request runs the same chain of jobs in GitHub Actions,
 each starting only if the previous one passed: `xctl` (format, lint, unit
 tests) → build (system, next version, live image: built once) → disk tests
-(first boot, A/B update, rollback, setup, Ripristino) → ISO (pack, boot,
+(first boot, A/B update, rollback, setup, Recovery) → ISO (pack, boot,
 install) → publish (channel branches only). The ISO is attached to the
 workflow run as the `xeeonos-iso` artifact.
 
@@ -89,11 +89,11 @@ The live system runs entirely from RAM (allow at least 4 GB) and logs in as
 `xctl install-system` installs XeeonOS on a whole disk, erasing it. See
 [docs/install.md](docs/install.md).
 
-## First boot and Ripristino
+## First boot and Recovery
 
 At the first boot `xctl setup` asks for the language, keyboard, time zone,
 computer name and the first user ([docs/setup.md](docs/setup.md)). The boot
-menu has a **Ripristino** entry that erases all data and starts again from the
+menu has a **Recovery** entry that erases all data and starts again from the
 first boot ([docs/recovery.md](docs/recovery.md)).
 
 ## Arch Linux

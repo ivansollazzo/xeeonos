@@ -6,16 +6,20 @@ XeeonOS is an image-based Linux distribution built on Arch Linux around three pr
 - **Simplicity**: one way to do each thing, and a system that updates and repairs itself.
 - **Speed**: fast boot, a responsive desktop, fresh packages.
 
-> Status: early development (Phase 0). Not ready for daily use.
+> Status: early development (Phase 1). Not ready for daily use.
 
 ## Branches
 
-| Branch | Purpose |
-| --- | --- |
-| `experimental` | Development branch. Every commit produces an `experimental` build. |
-| `main` | Stable releases only. |
+The channel is the branch name:
 
-Work happens on feature branches merged into `experimental` through pull requests.
+| Branch | Channel | Version example |
+| --- | --- | --- |
+| `experimental` | Free experimentation, continuous builds | `0.1.0-experimental.42` |
+| `<N>.x/alpha`, `<N>.x/beta`, `<N>.x/stable` (later) | Releases of major version N | `1.0.0-beta.57`, `1.0.0` |
+
+Changes enter a branch only through a pull request with green CI; work branches
+are deleted after merge. The base version lives in `mkosi.version`;
+`tools/version.sh` adds the channel and the CI run number.
 
 ## Modules
 
@@ -30,16 +34,30 @@ snapshot of the Arch Linux Archive, set in `mkosi.conf`. mkosi uses its own Arch
 tree, so you can build from any Linux distribution.
 
 ```sh
-mkosi --force build      # builds mkosi.output/xeeonos_<version>.efi
-mkosi vm                 # boots it in a virtual machine
+mkosi --force build                  # sealed disk image: mkosi.output/xeeonos_<version>.raw
+tools/boot-test.sh mkosi.output/xeeonos_0.1.0.raw   # first boot in QEMU + `xctl status --check`
 ```
 
 To produce the live ISO (needs `dosfstools`, `mtools`, `xorriso`):
 
 ```sh
-tools/mkiso.sh mkosi.output/xeeonos_0.0.1.efi xeeonos.iso
-tools/boot-test.sh xeeonos.iso   # optional: boot it in QEMU and wait for multi-user.target
+mkosi --force --profile=live build   # mkosi.output/xeeonos_<version>.efi
+tools/mkiso.sh mkosi.output/xeeonos_0.1.0.efi xeeonos.iso
+tools/boot-test.sh xeeonos.iso       # optional: boot it in QEMU
 ```
+
+## Disk layout
+
+| Partition | Content | Created |
+| --- | --- | --- |
+| ESP (1 GB) | systemd-boot, one UKI per version | in the image |
+| `/usr` slot A (8 GB) + verity | the OS, read-only erofs, dm-verity | in the image |
+| `/usr` slot B (8 GB) + verity | empty, receives the next update | first boot |
+| Data (rest of the disk) | Btrfs: `/etc`, `/var`, `/home` | first boot |
+
+Each UKI carries the verity root hash of its `/usr`. `/etc` starts empty: vendor
+defaults are linked from `/usr/share/factory/etc`, and what the administrator
+writes in `/etc` wins.
 
 Every push and pull request runs the same steps in GitHub Actions; the ISO is
 attached to the workflow run as the `xeeonos-iso` artifact.
@@ -56,8 +74,8 @@ as `root` on the console. It does not touch your disks.
 
 ## Roadmap
 
-0. **Foundations**: mkosi base on Arch, CI, live ISO. *(in progress)*
-1. A/B `/usr` partitions with dm-verity, `systemd-sysupdate`, automatic rollback, installer.
+0. **Foundations**: mkosi base on Arch, CI, live ISO. *(done)*
+1. *(in progress)* A/B `/usr` partitions with dm-verity, `systemd-sysupdate`, automatic rollback, installer.
 2. KDE Plasma desktop and speed work.
 3. `.xapp` applications in `/Applications`.
 4. Public release 0.1.

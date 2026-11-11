@@ -1,0 +1,15 @@
+#!/bin/bash
+# Prepare the image for a hermetic /usr: everything the OS needs must live in
+# /usr, because /etc and /var are not part of the image (they live on the data
+# partition, created empty at first boot).
+set -euo pipefail
+
+# tmpfiles snippets from Arch packages that expect a fully populated /etc.
+rm -f "$BUILDROOT"/usr/lib/tmpfiles.d/{arch,audit,openssh}.conf
+
+# Keep the package database (useful to know what is in the image) inside /usr.
+if [[ -d "$BUILDROOT/var/lib/pacman/local" ]]; then
+    mkdir -p "$BUILDROOT/usr/lib/pacman"
+    mv "$BUILDROOT/var/lib/pacman/local" "$BUILDROOT/usr/lib/pacman/"
+    sed -i 's|^#\?DBPath *=.*|DBPath = /usr/lib/pacman/|' "$BUILDROOT/etc/pacman.conf"
+fi

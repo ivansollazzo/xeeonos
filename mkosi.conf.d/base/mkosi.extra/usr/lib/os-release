@@ -1,8 +1,7 @@
 NAME="XeeonOS"
-PRETTY_NAME="XeeonOS (experimental)"
 ID=xeeonos
 ID_LIKE=arch
-BUILD_ID=rolling
+DEFAULT_HOSTNAME=xeeonos
 ANSI_COLOR="38;2;23;147;209"
 HOME_URL="https://github.com/ivansollazzo/xeeonos"
 BUG_REPORT_URL="https://github.com/ivansollazzo/xeeonos/issues"

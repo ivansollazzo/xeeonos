@@ -1,0 +1,83 @@
+#!/bin/bash
+# xctl - the XeeonOS system tool.
+#
+# Phase 1 (this version): `xctl status`. Updates, rollback, channels and the
+# installer arrive in the next Phase 1 steps.
+set -euo pipefail
+
+usage() {
+    cat <<EOF
+Usage: xctl <command>
+
+Commands:
+  status [--check]   Show the version and the state of the sealed system.
+                     With --check, exit with an error if the system is not
+                     sealed (read-only, verity-protected /usr).
+  help               Show this help.
+EOF
+}
+
+cmd_status() {
+    local check=0
+    [[ ${1:-} == --check ]] && check=1
+
+    # shellcheck source=/dev/null
+    . /usr/lib/os-release
+    local version=${IMAGE_VERSION:-unknown}
+    # The channel is read from /etc/xeeonos/channel; by default it is the one
+    # this version was built for (the part after the first "-").
+    local channel=stable
+    [[ $version == *-* ]] && { channel=${version#*-}; channel=${channel%%.*}; }
+    [[ -r /etc/xeeonos/channel ]] && channel=$(< /etc/xeeonos/channel)
+
+    local usr_opts usr_src usr_dm="" usr_verity=no usr_ro=no usr_part="" disk=""
+    usr_opts=$(findmnt --noheadings --output OPTIONS /usr || true)
+    usr_src=$(findmnt --noheadings --output SOURCE /usr || true)
+    [[ ,$usr_opts, == *,ro,* ]] && usr_ro=yes
+    if [[ $usr_src == /dev/mapper/* ]]; then
+        usr_dm=${usr_src#/dev/mapper/}
+        dmsetup table "$usr_dm" 2>/dev/null | grep -qw verity && usr_verity=yes
+        usr_part=$(dmsetup deps -o devname "$usr_dm" 2>/dev/null | grep -o '([^)]*)' | tr -d '()' | head -n 1 || true)
+    fi
+    [[ -n $usr_part ]] && disk=$(lsblk --noheadings --nodeps --output PKNAME "/dev/$usr_part" 2>/dev/null || true)
+
+    local root_fs
+    root_fs=$(findmnt --noheadings --output FSTYPE / || true)
+
+    echo "XeeonOS $version (build ${BUILD_ID:-unknown})"
+    echo "Channel:     $channel"
+    echo "/usr:        $usr_src (read-only: $usr_ro, verity: $usr_verity)"
+    echo "Data (/):    $root_fs"
+
+    local slots=0
+    if [[ -n $disk ]]; then
+        echo "/usr slots on /dev/$disk:"
+        while IFS=$'\t' read -r label name; do
+            slots=$((slots + 1))
+            local mark=""
+            [[ $name == "$usr_part" ]] && mark="  (running)"
+            [[ $label == _empty ]] && label="(empty)"
+            echo "  /dev/$name  $label$mark"
+        done < <(lsblk --list --noheadings --output NAME,PARTTYPE,PARTLABEL "/dev/$disk" |
+                 awk -v t=8484680c-9521-48c6-9c11-b0720656f69e 'tolower($2) == t { print $3 "\t" $1 }')
+    fi
+
+    if (( check )); then
+        local ok=1
+        [[ $usr_ro == yes ]] || { echo "check: /usr is not read-only"; ok=0; }
+        [[ $usr_verity == yes ]] || { echo "check: /usr is not protected by dm-verity"; ok=0; }
+        [[ $root_fs == btrfs ]] || { echo "check: the data partition is not Btrfs"; ok=0; }
+        (( slots >= 2 )) || { echo "check: expected 2 /usr slots, found $slots"; ok=0; }
+        if (( ok )); then
+            echo "check: sealed system OK"
+        else
+            return 1
+        fi
+    fi
+}
+
+case ${1:-help} in
+    status) shift; cmd_status "$@" ;;
+    help|-h|--help) usage ;;
+    *) usage >&2; exit 2 ;;
+esac

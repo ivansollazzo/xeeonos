@@ -10,6 +10,10 @@
 #   1.x/beta     -> 1.0.0-beta.57
 #   1.x/stable   -> 1.0.0
 #   anything     -> 0.1.0-dev.0
+#
+# With --channel, print the channel tag instead (the registry tag that
+# `xctl update` follows): experimental, <N>.x-alpha|beta|stable, or nothing
+# for development builds.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -22,6 +26,15 @@ case $branch in
     [0-9]*.x/alpha|[0-9]*.x/beta|[0-9]*.x/stable) channel=${branch#*/} ;;
     *) channel=dev ;;
 esac
+
+if [[ ${1:-} == --channel ]]; then
+    case $channel in
+        experimental) echo experimental ;;
+        dev) ;;
+        *) echo "${branch%%/*}-$channel" ;;
+    esac
+    exit 0
+fi
 
 if [[ $channel == stable ]]; then
     echo "$base"

@@ -6,3 +6,4 @@ mkosi.workspace/
 # build artifacts
 out/
 *.iso
+xctl/target/

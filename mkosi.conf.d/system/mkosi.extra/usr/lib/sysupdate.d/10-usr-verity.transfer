@@ -1,0 +1,20 @@
+# systemd-sysupdate: how a new XeeonOS version is installed. `xctl update`
+# downloads and verifies the files into /var/cache/xctl/update, then runs
+# systemd-sysupdate, which writes them into the free /usr slot and the ESP.
+# The running version (%A) is never touched.
+
+[Transfer]
+ProtectVersion=%A
+
+[Source]
+Type=regular-file
+Path=/var/cache/xctl/update
+MatchPattern=xeeonos_@v.usr-x86-64-verity.@u.raw.zst
+
+[Target]
+Type=partition
+Path=auto
+MatchPattern=xeeonos_@v
+MatchPartitionType=usr-verity
+PartitionFlags=0
+ReadOnly=1

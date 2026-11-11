@@ -19,8 +19,8 @@ snapshot, output, tools tree) stay in the top-level `mkosi.conf`.
 | Module | Kind | Purpose |
 | --- | --- | --- |
 | `base` | core | Kernel, firmware, systemd, NetworkManager, XeeonOS identity and version |
-| `system` | core | Sealed disk: ESP, A/B `/usr` slots (erofs + dm-verity), Btrfs data partition, hermetic `/etc` |
-| `xctl` | core | The `xctl` system tool |
+| `system` | core | Sealed disk: ESP, A/B `/usr` slots (erofs + dm-verity), Btrfs data partition, hermetic `/etc`, sysupdate definitions |
+| `xctl` | core | The `xctl` system tool (Rust, source in `xctl/`): status, update, channel |
 | `live` | optional | Live ISO: UKI running from RAM, root autologin; replaces `system` |
 
 ## Variants

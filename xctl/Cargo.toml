@@ -1,0 +1,18 @@
+[package]
+name = "xctl"
+version = "0.1.0"
+edition = "2024"
+description = "The XeeonOS system tool"
+publish = false
+
+# Few, well-known crates. Cargo.lock pins their exact versions and checksums,
+# and the image build uses `--locked`, so nothing changes behind our back.
+[dependencies]
+# Reading the JSON answers of the container registry (OCI manifests).
+serde_json = "1"
+
+[profile.release]
+# Small, fast binary: optimize, strip symbols, link-time optimization.
+opt-level = 3
+lto = true
+strip = true

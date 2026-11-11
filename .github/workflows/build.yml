@@ -81,13 +81,15 @@ jobs:
           tools/boot-test.sh out/disk.raw out/serial-1-firstboot.log
 
       - name: "Test 2: update to the next version over HTTP"
+        # systemd.run= replaces the boot target, so the normal services
+        # (network included) are not started: start the network first.
         run: |
           GNUPGHOME=$RUNNER_TEMP/test-gnupg SIGNING_KEY="XeeonOS CI test key" \
             tools/mkupdate.sh mkosi.output/next "$NEXT" out/update-next
           tools/boot-test.sh \
             --http out/update-next \
             --credential "xctl.keyring=$RUNNER_TEMP/test-keyring.gpg" \
-            --run "/usr/bin/xctl update --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring" \
+            --run "/bin/sh -c 'systemctl start network-online.target && /usr/bin/xctl update --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring'" \
             --expect "XeeonOS $NEXT is installed" \
             out/disk.raw out/serial-2-update.log
 

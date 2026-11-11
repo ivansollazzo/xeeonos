@@ -38,6 +38,9 @@ pub fn run(check: bool) -> Result<()> {
         output_opt("findmnt", &["--noheadings", "--output", "FSTYPE", "/"]).unwrap_or_default();
 
     println!("XeeonOS {version} (build {build})");
+    if let Some(snapshot) = os.get("XEEONOS_ARCH_SNAPSHOT") {
+        println!("Based on:    Arch Linux (snapshot {snapshot})");
+    }
     println!(
         "Channel:     {}",
         channel.as_deref().unwrap_or("none (development build)")

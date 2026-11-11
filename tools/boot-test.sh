@@ -22,6 +22,10 @@
 #   --disk <file>           attach <file> as an extra, blank virtio disk
 #                           (/dev/vda in the live system), created with
 #                           DISK_SIZE if missing: the target of an install
+#   --setup <file>          run the first-boot setup unattended, with the
+#                           answers in <file> (credential xeeonos.setup);
+#                           by default the setup is skipped
+#   --cmdline <args>        extra kernel command line arguments
 #   --allow-reboot          let the VM restart (to test the fallback after
 #                           failed boots); by default a restart ends the test
 # Env: TIMEOUT (seconds, default 300), MEMORY (MiB, default 6144),
@@ -30,6 +34,8 @@ set -euo pipefail
 
 run=""
 disk=""
+setup=""
+extra_cmdline=""
 expect=()
 credentials=()
 http_dir=""
@@ -41,6 +47,8 @@ while (( $# )); do
         --credential) credentials+=("$2"); shift 2 ;;
         --http) http_dir=$2; shift 2 ;;
         --disk) disk=$2; shift 2 ;;
+        --setup) setup=$2; shift 2 ;;
+        --cmdline) extra_cmdline=$2; shift 2 ;;
         --allow-reboot) no_reboot=(); shift ;;
         -*) echo "unknown option: $1" >&2; exit 2 ;;
         *) break ;;
@@ -71,7 +79,13 @@ run_media() {
     local bless cmdline c name file
     bless="test -e /sys/firmware/efi/efivars/LoaderBootCountPath-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
     bless+=" || exit 0; systemctl start systemd-bless-boot.service"
-    cmdline="console=ttyS0,115200 systemd.firstboot=no"
+    cmdline="console=ttyS0,115200"
+    if [[ -n $setup ]]; then
+        credentials+=("xeeonos.setup=$setup")
+    else
+        cmdline+=" systemd.firstboot=no"
+    fi
+    [[ -z $extra_cmdline ]] || cmdline+=" $extra_cmdline"
     cmdline+=" systemd.run=\"/bin/sh -c '$bless'\""
     cmdline+=" systemd.run=\"$run\""
     cmdline+=" systemd.run_success_action=poweroff systemd.run_failure_action=poweroff"

@@ -5,6 +5,7 @@
 #   xeeonos_<v>.efi                             kernel (UKI)
 #   xeeonos_<v>.usr-x86-64.<uuid>.raw.zst        /usr partition
 #   xeeonos_<v>.usr-x86-64-verity.<uuid>.raw.zst verity hash partition
+#   xeeonos_<v>.manifest                         list of packages (if built)
 #   SHA256SUMS, SHA256SUMS.gpg                   manifest + detached signature
 #
 # Usage: tools/mkupdate.sh <mkosi output dir> <version> <update dir>
@@ -19,6 +20,9 @@ out=${3:?update dir missing}
 
 mkdir -p "$out"
 cp "$src/xeeonos_$version.efi" "$out/"
+if [[ -e $src/xeeonos_$version.manifest ]]; then
+    cp "$src/xeeonos_$version.manifest" "$out/"
+fi
 for part in "$src/xeeonos_$version".usr-x86-64.*.raw "$src/xeeonos_$version".usr-x86-64-verity.*.raw; do
     [[ -e $part ]] || { echo "missing partition file in $src: $part" >&2; exit 1; }
     zstd --quiet --force -T0 -10 "$part" -o "$out/$(basename "$part").zst"

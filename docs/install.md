@@ -13,6 +13,10 @@ For now the only mode is **whole disk**: everything on the chosen disk is
 erased (you confirm by typing the disk's name). The disk needs at least 24 GiB.
 Installing next to another system and manual partitioning come later.
 
+`xctl install-system` works only in the live ISO or in Recovery. On a running
+installed system it refuses: reinstalling there would erase the disk the
+system is running from.
+
 ## What it does
 
 1. Checks the files on the ISO against their `SHA256SUMS`.

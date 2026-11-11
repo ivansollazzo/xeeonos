@@ -22,6 +22,7 @@ use std::process::{Command, Stdio};
 
 use serde_json::Value;
 
+use crate::config;
 use crate::update::{check_hashes, newest_version};
 use crate::util::{Result, err, need_root, output, run};
 
@@ -68,6 +69,12 @@ pub fn run_install(args: &[String]) -> Result<()> {
         }
     }
     need_root("install-system")?;
+    if !installer_allowed() {
+        return Err(err(
+            "XeeonOS is already installed and running here. To reinstall it, \
+             restart into Recovery (boot menu) or start the installation medium.",
+        ));
+    }
 
     // 1. The files to install, checked against their manifest.
     let (dir, _mount) = match from {
@@ -390,12 +397,35 @@ impl Drop for TempDir {
     }
 }
 
+/// The installer runs only from the live ISO or from Recovery, never on a
+/// running installed system (it would erase the disk it is running from).
+fn installer_allowed() -> bool {
+    let cmdline = fs::read_to_string("/proc/cmdline").unwrap_or_default();
+    Path::new(config::LIVE_MARKER).exists() || is_recovery(&cmdline)
+}
+
+/// True if the kernel command line has the Recovery word.
+fn is_recovery(cmdline: &str) -> bool {
+    cmdline
+        .split_whitespace()
+        .any(|w| w == config::RECOVERY_CMDLINE)
+}
+
 /// The live medium, mounted read-only for as long as this value lives.
 struct Mount(PathBuf);
 
 impl Mount {
     fn medium() -> Result<Mount> {
         let dev = Path::new("/dev/disk/by-label").join(MEDIUM_LABEL);
+        // Early in the boot, udev may not have named the disks yet: wait
+        // for it, and give a slow drive (USB, DVD) up to 30 seconds.
+        let _ = run("udevadm", &["settle", "--timeout=30"]);
+        for _ in 0..30 {
+            if dev.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
         if !dev.exists() {
             return Err(err(
                 "the XeeonOS installation medium was not found; use --from <directory>",
@@ -420,6 +450,13 @@ impl Drop for Mount {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovery_cmdline() {
+        assert!(is_recovery("root=dissect xeeonos.recovery quiet"));
+        assert!(!is_recovery("root=dissect xeeonos.recovery=0"));
+        assert!(!is_recovery(""));
+    }
 
     #[test]
     fn uuid() {

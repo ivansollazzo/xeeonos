@@ -1,0 +1,37 @@
+#!/bin/bash
+# Last touches, after mkosi has removed pacman (RemovePackages=) and the
+# package database: write the package list and remove what an image-based
+# system does not use.
+set -euo pipefail
+root=$BUILDROOT
+
+# 1. The list of packages in the image, for `xctl packages`. The database
+# copy was saved by mkosi.postinst; a package removed at the end of the build
+# no longer has its files, so it is left out.
+db=$root/var/tmp/xeeonos-pkgdb
+mkdir -p "$root/usr/share/xeeonos"
+for pkg in "$db"/*/; do
+    name=$(sed -n '/^%NAME%$/{n;p;q}' "$pkg/desc")
+    version=$(sed -n '/^%VERSION%$/{n;p;q}' "$pkg/desc")
+    # The first file (not directory) of the package. awk reads the whole
+    # input: no `| head`, which would break the pipe (exit 141 with pipefail).
+    file=$(awk '/^%FILES%$/ {f=1; next} /^$/ {f=0} f && !/\/$/ && !seen {print; seen=1}' "$pkg/files" 2>/dev/null || true)
+    if [[ -z $file || -e $root/$file || -L $root/$file ]]; then
+        printf '%s %s\n' "$name" "$version"
+    fi
+done | sort >"$root/usr/share/xeeonos/packages"
+rm -rf "$db"
+
+# 2. Arch's way of installing and configuring: not used on XeeonOS.
+rm -rf "$root/usr/share/libalpm" "$root/etc/pacman.d" "$root/etc/pacman.conf" \
+    "$root/etc/makepkg.conf" "$root/etc/makepkg.conf.d" "$root/var/lib/pacman" \
+    "$root/var/cache/pacman"
+# Languages come ready-made (glibc-locales): nothing to generate.
+rm -f "$root/usr/bin/locale-gen" "$root/etc/locale.gen"
+# Arch's identity file (the identity is os-release) and an empty fstab
+# (systemd finds the partitions by itself).
+rm -f "$root/etc/arch-release" "$root/etc/fstab"
+
+# 3. Files only used to compile programs (development happens in distrobox).
+rm -rf "$root/usr/include" "$root/usr/lib/pkgconfig" "$root/usr/share/pkgconfig"
+find "$root/usr/lib" -name '*.a' -type f -delete

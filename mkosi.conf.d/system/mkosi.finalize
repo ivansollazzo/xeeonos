@@ -1,0 +1,10 @@
+#!/bin/bash
+# Keep a pristine copy of the build's /etc inside /usr ("factory" defaults).
+# At boot, systemd-tmpfiles links the files the system needs from there into
+# the real /etc (see usr/lib/tmpfiles.d/etc.conf), so a new /usr brings new
+# defaults with it, and anything the administrator writes in /etc wins.
+set -euo pipefail
+
+mkdir -p "$BUILDROOT/usr/share/factory"
+cp --archive --no-target-directory --update=none \
+    "$BUILDROOT/etc" "$BUILDROOT/usr/share/factory/etc"

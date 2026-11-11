@@ -18,8 +18,10 @@ snapshot, output, tools tree) stay in the top-level `mkosi.conf`.
 
 | Module | Kind | Purpose |
 | --- | --- | --- |
-| `base` | core | Kernel, firmware, systemd, NetworkManager, XeeonOS identity |
-| `live` | core | Phase 0 live format: UKI running from RAM, root autologin |
+| `base` | core | Kernel, firmware, systemd, NetworkManager, XeeonOS identity and version |
+| `system` | core | Sealed disk: ESP, A/B `/usr` slots (erofs + dm-verity), Btrfs data partition, hermetic `/etc` |
+| `xctl` | core | The `xctl` system tool |
+| `live` | optional | Live ISO: UKI running from RAM, root autologin; replaces `system` |
 
 ## Variants
 
@@ -27,7 +29,8 @@ A variant is a set of optional modules on top of the core ones:
 
 | Variant | Command |
 | --- | --- |
-| Core (no desktop) | `mkosi build` |
+| Core (no desktop), installed system | `mkosi build` |
+| Live ISO | `mkosi --profile=live build` |
 | Desktop (planned) | `mkosi --profile=plasma,flatpak,xapp build` |
 
 ## Runtime modules

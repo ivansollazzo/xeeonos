@@ -1,0 +1,12 @@
+#!/bin/bash
+# Stamp the version into os-release. mkosi adds IMAGE_ID and IMAGE_VERSION
+# itself; VERSION, VERSION_ID, PRETTY_NAME and BUILD_ID are derived here.
+set -euo pipefail
+
+version=${IMAGE_VERSION:?}
+cat >>"$BUILDROOT/usr/lib/os-release" <<EOS
+VERSION="$version"
+VERSION_ID="${version%%-*}"
+PRETTY_NAME="XeeonOS $version"
+BUILD_ID="$(date -u +%Y%m%d)"
+EOS

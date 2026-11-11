@@ -1,8 +1,10 @@
 name: Build
 
+# Channel branches: `experimental` now, later `<N>.x/alpha|beta|stable`.
+# Pull requests build and test, but never publish anything.
 on:
   push:
-    branches: [experimental, main]
+    branches: [experimental, '*.x/alpha', '*.x/beta', '*.x/stable']
   pull_request:
   workflow_dispatch:
 
@@ -11,8 +13,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  disk:
+    name: Build sealed disk image and test boot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mkosi
+        uses: systemd/mkosi@v27.1
+
+      - name: Install VM tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --assume-yes --no-install-recommends qemu-system-x86 ovmf
+
+      - name: Compute version
+        run: echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
+
+      - name: Build disk image
+        run: |
+          mkdir -p mkosi.cache
+          mkosi --force --image-version="$VERSION" build
+          ls -lhs mkosi.output/
+
+      - name: Boot test in QEMU (first boot, sealed /usr)
+        run: |
+          mkdir -p out
+          tools/boot-test.sh "mkosi.output/xeeonos_$VERSION.raw" out/serial-disk.log
+
+      - name: Upload boot log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: serial-log-disk
+          path: out/serial-disk.log
+          if-no-files-found: ignore
+
   iso:
-    name: Build ISO and test boot
+    name: Build live ISO and test boot
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -27,19 +66,23 @@ jobs:
           sudo apt-get install --assume-yes --no-install-recommends \
             dosfstools mtools xorriso qemu-system-x86 ovmf
 
-      - name: Build image (UKI)
-        run: mkosi --force build
+      - name: Compute version
+        run: echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
+
+      - name: Build live image (UKI)
+        run: |
+          mkdir -p mkosi.cache
+          mkosi --force --profile=live --image-version="$VERSION" build
+          ls -lh mkosi.output/
 
       - name: Pack ISO
         run: |
-          uki=$(ls -t mkosi.output/*.efi | head -n 1)
-          ls -lh "$uki"
           mkdir -p out
-          tools/mkiso.sh "$uki" "out/xeeonos-experimental-$(date -u +%Y%m%d)-${GITHUB_SHA::7}.iso"
+          tools/mkiso.sh "mkosi.output/xeeonos_$VERSION.efi" "out/xeeonos-$VERSION.iso"
           ls -lh out/
 
       - name: Boot test in QEMU
-        run: tools/boot-test.sh out/*.iso out/serial.log
+        run: tools/boot-test.sh "out/xeeonos-$VERSION.iso" out/serial-live.log
 
       - name: Upload ISO
         if: success()
@@ -53,6 +96,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: serial-log
-          path: out/serial.log
+          name: serial-log-live
+          path: out/serial-live.log
           if-no-files-found: ignore

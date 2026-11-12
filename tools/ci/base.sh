@@ -38,7 +38,7 @@ xctl report && tar --zstd -tf /var/tmp/xeeonos-report-*.tar.zst | grep -c .txt |
     --expect "TIMER-xeeonos-health.timer-enabled" \
     --expect "TIMER-fstrim.timer-enabled" \
     --expect "TIMER-fwupd-refresh.timer-enabled" \
-    --expect "development build without an update channel: nothing to check" \
+    --expect "(development build without an update channel: nothing to check|Checking ghcr\.io/.*:$(tools/version.sh --channel)\.\.\.)" \
     --expect "HAS-FWUPD" \
     --expect "REPORT-FILES-18" \
     out/disk.raw out/serial-base.log

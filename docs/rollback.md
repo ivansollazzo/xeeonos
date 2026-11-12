@@ -61,5 +61,5 @@ CI (`tools/ci/update.sh`), after the update test, on the same disk:
 1. `xctl rollback --yes` on N+1, restart: N runs, N+1 is shown as bad.
 2. The check does not offer N+1; `xctl update` writes it again; it starts.
 3. Update to a broken N+2 (the start of its `/usr` overwritten, so dm-verity
-   refuses it): it installs, fails to start 3 times, and N+1 starts again
-   with N+2 shown as bad.
+   refuses it), after going back to N again: it installs, fails to start 3
+   times, and N starts again with N+2 shown as bad.

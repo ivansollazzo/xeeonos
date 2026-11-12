@@ -94,18 +94,26 @@ tools/boot-test.sh \
     out/disk.raw out/serial-5c-after-reinstall.log
 echo "::endgroup::"
 
-# The first version under a newer number, with the start of its /usr
+# The next version under a newer number, with the start of its /usr
 # overwritten: it installs fine (the files match the signed manifest) but
-# cannot start, because dm-verity refuses the damaged blocks. (Not the
-# running version: its kernel would find that version's intact /usr in the
-# other slot, by its verity hash, and start from it.)
+# cannot start, because dm-verity refuses the damaged blocks. It replaces the
+# next version's slot, so no intact copy of that /usr is left to start from.
+# (A copy of the first version would not do: the boot menu sorts by the
+# version inside the kernel file, so it would come after the running one.)
+# Back to the first version, so that the broken one replaces the next one.
+echo "::group::5d. xctl rollback again"
+tools/boot-test.sh --run "/usr/bin/xctl rollback --yes" \
+    --expect "XeeonOS $NEXT is disabled. Restart to go back to XeeonOS $VERSION\." \
+    out/disk.raw out/serial-5d-rollback-again.log
+echo "::endgroup::"
+
 echo "::group::6. Install a broken version"
 src=out/broken-src
 mkdir -p "$src"
-cp "build/update-system/xeeonos_$VERSION.efi" "$src/xeeonos_$BROKEN.efi"
-for f in build/update-system/xeeonos_"$VERSION".usr-*.raw.zst; do
+cp "build/update-next/xeeonos_$NEXT.efi" "$src/xeeonos_$BROKEN.efi"
+for f in build/update-next/xeeonos_"$NEXT".usr-*.raw.zst; do
     name=$(basename "$f" .zst)
-    zstd -d --sparse --quiet "$f" -o "$src/xeeonos_$BROKEN${name#xeeonos_$VERSION}"
+    zstd -d --sparse --quiet "$f" -o "$src/xeeonos_$BROKEN${name#xeeonos_$NEXT}"
 done
 dd if=/dev/urandom of="$(echo "$src"/xeeonos_"$BROKEN".usr-x86-64.*.raw)" bs=1M count=1 conv=notrunc
 SIGNING_KEY="XeeonOS CI test key" tools/mkupdate.sh "$src" "$BROKEN" out/update-broken
@@ -118,8 +126,8 @@ echo "::endgroup::"
 echo "::group::7. After 3 failed attempts, the previous version starts"
 TIMEOUT=900 tools/boot-test.sh --allow-reboot \
     --expect "XeeonOS: this version failed to start; restarting" \
-    --expect "XeeonOS $NEXT \(build" \
-    --expect "$NEXT +good, running" \
+    --expect "XeeonOS $VERSION \(build" \
+    --expect "$VERSION +good, running" \
     --expect "$BROKEN +bad" \
     --expect "check: sealed system OK" \
     out/disk.raw out/serial-7-fallback.log

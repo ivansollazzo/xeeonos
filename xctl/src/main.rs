@@ -65,8 +65,9 @@ Commands:
   packages [<name>]      List the packages of this version (and their
                          versions); with <name>, only those containing it.
   setup                  First-boot setup: language, keyboard, time zone,
-                         computer name, first user (runs by itself at the
-                         first boot).
+                         computer name, first user. It runs by itself at the
+                         first boot (and after erasing everything), and
+                         never again on a system already set up.
   install-system [options]
                          Install XeeonOS onto a disk, from the live ISO or
                          from Recovery: on a whole disk (erased), or next

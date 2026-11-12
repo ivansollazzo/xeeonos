@@ -1,0 +1,14 @@
+# Recovery: the basic system, the network and the Recovery menu; no login
+# prompt and no desktop. Started by the Recovery entry of the boot menu
+# (recovery.profile). See docs/recovery.md.
+[Unit]
+Description=XeeonOS Recovery
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/recovery.md
+Requires=basic.target
+After=basic.target
+Wants=xeeonos-recovery.service NetworkManager.service
+# Automated tests run their command (systemd.run=) in Recovery too; without
+# it this unit does not exist and the line has no effect.
+Wants=kernel-command-line.service
+Conflicts=rescue.service rescue.target
+AllowIsolate=yes

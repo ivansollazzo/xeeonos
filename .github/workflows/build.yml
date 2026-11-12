@@ -233,12 +233,13 @@ jobs:
             "fullname=Test User" password=test-password admin=yes > out/setup.txt
           tools/boot-test.sh \
             --setup out/setup.txt \
-            --run "/bin/sh -c 'id -nG test; cat /etc/locale.conf /etc/vconsole.conf; test -e /usr/bin/pacman || echo NO-PACMAN; locale -a | grep -q de_DE.utf8 && echo HAS-GERMAN; xctl packages systemd-libs; xctl install-system --disk /dev/vda --yes; xctl status --check'" \
+            --run "/bin/sh -c 'id -nG test; cat /etc/locale.conf /etc/vconsole.conf; test -e /usr/bin/pacman || echo NO-PACMAN; test -e /etc/arch-release || test -e /usr/share/factory/etc/arch-release || echo NO-ARCH-RELEASE; locale -a | grep -q de_DE.utf8 && echo HAS-GERMAN; xctl packages systemd-libs; xctl install-system --disk /dev/vda --yes; xctl status --check'" \
             --expect "XeeonOS setup: created user test \(administrator\)" \
             --expect "test wheel" \
             --expect "LANG=it_IT.UTF-8" \
             --expect "KEYMAP=it" \
             --expect "NO-PACMAN" \
+            --expect "NO-ARCH-RELEASE" \
             --expect "HAS-GERMAN" \
             --expect "systemd-libs [0-9]" \
             --expect "already installed and running here" \
@@ -246,17 +247,35 @@ jobs:
             --expect "check: sealed system OK" \
             out/disk.raw out/serial-8-setup.log
 
-      - name: "Test 9: Recovery (factory reset)"
-        # The boot menu has a Recovery entry for each version; booting with
-        # its command line erases the data partition (the user is gone).
+      - name: "Test 9: Recovery: restart into it, then erase everything"
+        # Three boots sharing the UEFI variables: the running system asks for
+        # Recovery at the next boot only (one-shot boot menu choice); in
+        # Recovery, "erase" asks for a factory reset; at the boot after that
+        # the data partition is new: the user created by the setup is gone.
+        # (While the test command runs, xeeonos-recovery.target is still being
+        # started: it waits for the units it pulls in, the command included. So
+        # the test looks for its start job, not for "active".)
+        # (The commands write "xeeonos[.]recovery": the command itself is on
+        # the kernel command line, and must not contain the Recovery word.)
         run: |
-          tools/boot-test.sh \
-            --cmdline systemd.factory_reset=1 \
-            --run "/bin/sh -c 'bootctl list | grep -i recovery; id test || echo USER-GONE; xctl status --check'" \
-            --expect "Recovery" \
+          tools/boot-test.sh --efivars out/vars-9.fd \
+            --run "/bin/sh -c 'grep -qw xeeonos[.]recovery /proc/cmdline && echo WRONG-BOOT; xctl recovery --yes'" \
+            --expect "Restarting into Recovery \(xeeonos_${VERSION}\.efi@recovery\)" \
+            out/disk.raw out/serial-9a-to-recovery.log
+          tools/boot-test.sh --efivars out/vars-9.fd \
+            --run "/bin/sh -c 'grep -qw xeeonos[.]recovery /proc/cmdline && echo IN-RECOVERY; systemctl list-jobs --no-legend | grep xeeonos-recovery.target | sed s,^,TARGET-JOB-,; command -v nmtui && echo HAS-NMTUI; xctl recovery erase --yes'" \
+            --expect "IN-RECOVERY" \
+            --expect "TARGET-JOB-.*xeeonos-recovery.target +start" \
+            --expect "HAS-NMTUI" \
+            --expect "All data will be erased at the restart" \
+            out/disk.raw out/serial-9b-recovery.log
+          tools/boot-test.sh --efivars out/vars-9.fd \
+            --run "/bin/sh -c 'grep -qw xeeonos[.]recovery /proc/cmdline && echo WRONG-BOOT; id test || echo USER-GONE; xctl recovery < /dev/null; xctl status --check'" \
             --expect "USER-GONE" \
+            --expect "Restart into Recovery now" \
             --expect "check: sealed system OK" \
-            out/disk.raw out/serial-9-reset.log
+            out/disk.raw out/serial-9c-erased.log
+          ! grep -q WRONG-BOOT out/serial-9a-to-recovery.log out/serial-9c-erased.log
 
       - name: Upload boot logs
         if: always()
@@ -303,7 +322,8 @@ jobs:
         run: |
           tools/boot-test.sh \
             --disk out/target.raw \
-            --run "/bin/sh -c '/usr/bin/xctl install-system --disk /dev/vda --yes && exit 0; echo DIAG; ls -l /dev/disk/by-label; lsblk; ls /usr/lib/modules/*/kernel/drivers | head; journalctl -k -b --no-pager | grep -i -e sr0 -e sr_mod -e initramfs -e ahci -e ata; exit 1'" \
+            --run "/bin/sh -c 'test -e /etc/arch-release || echo LIVE-NO-ARCH-RELEASE; /usr/bin/xctl install-system --disk /dev/vda --yes && exit 0; echo DIAG; ls -l /dev/disk/by-label; lsblk; ls /usr/lib/modules/*/kernel/drivers | head; journalctl -k -b --no-pager | grep -i -e sr0 -e sr_mod -e initramfs -e ahci -e ata; exit 1'" \
+            --expect "LIVE-NO-ARCH-RELEASE" \
             --expect "XeeonOS $VERSION is installed on /dev/vda" \
             "out/xeeonos-$VERSION.iso" out/serial-install.log
 

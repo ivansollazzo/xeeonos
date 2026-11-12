@@ -93,8 +93,9 @@ The live system runs entirely from RAM (allow at least 4 GB) and logs in as
 
 At the first boot `xctl setup` asks for the language, keyboard, time zone,
 computer name and the first user ([docs/setup.md](docs/setup.md)). The boot
-menu has a **Recovery** entry that erases all data and starts again from the
-first boot ([docs/recovery.md](docs/recovery.md)).
+menu has a **Recovery** entry (also `sudo xctl recovery`) with a menu to
+reinstall, go back to the previous version, set up the network, open an
+administrator shell or erase everything ([docs/recovery.md](docs/recovery.md)).
 
 ## Arch Linux
 

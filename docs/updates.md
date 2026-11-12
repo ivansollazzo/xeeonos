@@ -48,7 +48,13 @@ The channel is the branch: `experimental`, then `<N>.x/alpha`, `<N>.x/beta`,
 `<N>.x/stable`. `mkosi.version` holds the base version, and on a `<N>.x/*`
 branch it must start with `N.` (the channel tag is derived from it).
 
-## Signing key (one-time setup)
+## Signing key
+
+The current key is **XeeonOS updates**, fingerprint
+`58AE 3043 5152 8B13 481B  1317 A7AC BBA9 8DC0 A7D8` (ed25519), committed in
+`mkosi.conf.d/xctl/mkosi.extra/usr/lib/xeeonos/update-keyring.gpg`.
+
+### One-time setup (done)
 
 Updates are only published once the signing key exists. On your own computer:
 

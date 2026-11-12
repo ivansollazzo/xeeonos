@@ -128,6 +128,18 @@ pub fn previous<'a>(entries: &'a [Entry], current: &str) -> Option<&'a Entry> {
         .max_by(|a, b| compare(&a.version, &b.version))
 }
 
+/// True when this boot is Recovery: the boot menu entry adds a word to the
+/// kernel command line (see mkosi.conf.d/system/recovery.profile).
+pub fn in_recovery() -> bool {
+    has_recovery_word(&fs::read_to_string("/proc/cmdline").unwrap_or_default())
+}
+
+fn has_recovery_word(cmdline: &str) -> bool {
+    cmdline
+        .split_whitespace()
+        .any(|w| w == config::RECOVERY_CMDLINE)
+}
+
 /// `xctl rollback`
 pub fn rollback(args: &[String]) -> Result<()> {
     if let Some(arg) = args.first() {
@@ -191,6 +203,13 @@ mod tests {
         assert_eq!(parse_entry("arch-linux.efi"), None);
         assert_eq!(parse_entry("xeeonos_1.0.0+x.efi"), None);
         assert_eq!(parse_entry("xeeonos_.efi"), None);
+    }
+
+    #[test]
+    fn recovery_cmdline() {
+        assert!(has_recovery_word("root=dissect xeeonos.recovery quiet"));
+        assert!(!has_recovery_word("root=dissect xeeonos.recovery=0"));
+        assert!(!has_recovery_word(""));
     }
 
     #[test]

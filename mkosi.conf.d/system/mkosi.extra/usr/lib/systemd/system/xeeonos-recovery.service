@@ -1,0 +1,21 @@
+# The Recovery menu (`xctl recovery`) on the first console. It comes back if
+# it is closed; "Restart" in the menu leaves Recovery.
+[Unit]
+Description=XeeonOS Recovery menu
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/recovery.md
+ConditionKernelCommandLine=xeeonos.recovery
+After=basic.target NetworkManager.service xeeonos-setup.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=idle
+ExecStart=/usr/bin/xctl recovery
+Restart=always
+Environment=TERM=linux
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes

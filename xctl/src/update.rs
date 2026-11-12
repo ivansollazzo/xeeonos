@@ -95,7 +95,12 @@ pub fn run(args: &[String]) -> Result<()> {
                     "this is a development build without an update channel; use --from <source>",
                 ));
             };
-            Source::Oci(format!("{}:{channel}", config::REGISTRY))
+            // stable, beta, alpha: the channel with the newest version now.
+            let tag = channel::resolve(&channel)?;
+            if tag != channel {
+                println!("Channel {channel}: now {tag}.");
+            }
+            Source::Oci(format!("{}:{tag}", config::REGISTRY))
         }
     };
 

@@ -63,21 +63,7 @@ impl Artifact {
         // whatever happens.
         let result = (|| {
             // 1. Anonymous token (public packages need no account).
-            let token_file = tmp.join("token.json");
-            download_with(
-                &format!(
-                    "https://{}/token?scope=repository:{}:pull",
-                    r.registry, r.repository
-                ),
-                &token_file,
-                &[],
-            )?;
-            let token: Value = serde_json::from_str(&fs::read_to_string(&token_file)?)
-                .map_err(|e| err(format!("unexpected answer from {}: {e}", r.registry)))?;
-            let auth: Vec<String> = token["token"]
-                .as_str()
-                .map(|t| vec![format!("Authorization: Bearer {t}")])
-                .unwrap_or_default();
+            let auth = token(&r.registry, &r.repository, &tmp)?;
 
             // 2. The manifest of the tag.
             let base = format!("https://{}/v2/{}", r.registry, r.repository);
@@ -102,6 +88,11 @@ impl Artifact {
         result
     }
 
+    /// The names of the files in the artifact.
+    pub fn file_names(&self) -> Vec<String> {
+        self.files.keys().cloned().collect()
+    }
+
     /// Download the file called `name` into `to`.
     pub fn download(&self, name: &str, to: &Path) -> Result<()> {
         let digest = self
@@ -110,6 +101,72 @@ impl Artifact {
             .ok_or_else(|| err(format!("the update has no file named {name}")))?;
         download_with(&format!("{}/blobs/{digest}", self.base), to, &self.auth)
     }
+}
+
+/// An anonymous pull token for `repository`, as an Authorization header
+/// (none if the registry gives no token).
+fn token(registry: &str, repository: &str, tmp: &Path) -> Result<Vec<String>> {
+    let token_file = tmp.join("token.json");
+    download_with(
+        &format!("https://{registry}/token?scope=repository:{repository}:pull"),
+        &token_file,
+        &[],
+    )?;
+    let token: Value = serde_json::from_str(&fs::read_to_string(&token_file)?)
+        .map_err(|e| err(format!("unexpected answer from {registry}: {e}")))?;
+    Ok(token["token"]
+        .as_str()
+        .map(|t| vec![format!("Authorization: Bearer {t}")])
+        .unwrap_or_default())
+}
+
+/// All the tags of a repository, e.g. `ghcr.io/ivansollazzo/xeeonos`
+/// (GET /v2/<repo>/tags/list, a page at a time: `last` is where the
+/// previous page ended).
+pub fn tags(repository: &str) -> Result<Vec<String>> {
+    let (registry, repo) = repository
+        .split_once('/')
+        .ok_or_else(|| err(format!("invalid repository: {repository}")))?;
+    let tmp = std::env::temp_dir().join(format!("xctl-tags-{}", std::process::id()));
+    fs::create_dir_all(&tmp)?;
+    let result = (|| {
+        let auth = token(registry, repo, &tmp)?;
+        let page_file = tmp.join("tags.json");
+        let mut all: Vec<String> = Vec::new();
+        loop {
+            let mut url = format!("https://{registry}/v2/{repo}/tags/list?n={PAGE}");
+            if let Some(last) = all.last() {
+                url.push_str(&format!("&last={last}"));
+            }
+            download_with(&url, &page_file, &auth)
+                .map_err(|e| err(format!("cannot read the channels on {registry}: {e}")))?;
+            let page = tags_in_page(&fs::read_to_string(&page_file)?)?;
+            let full = page.len() >= PAGE;
+            all.extend(page);
+            if !full {
+                return Ok(all);
+            }
+        }
+    })();
+    let _ = fs::remove_dir_all(&tmp);
+    result
+}
+
+const PAGE: usize = 1000;
+
+/// The tags in one page of /tags/list: `{"name": ..., "tags": [...]}`
+/// (`"tags": null` after the last page).
+fn tags_in_page(json: &str) -> Result<Vec<String>> {
+    let json: Value =
+        serde_json::from_str(json).map_err(|e| err(format!("invalid tag list: {e}")))?;
+    Ok(json["tags"]
+        .as_array()
+        .map(|tags| {
+            tags.iter()
+                .filter_map(|t| t.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default())
 }
 
 /// File name -> digest, from an OCI image manifest (JSON).
@@ -157,6 +214,21 @@ mod tests {
         );
         assert!(parse_reference("xeeonos").is_err());
         assert!(parse_reference("ghcr.io/xeeonos").is_err());
+    }
+
+    #[test]
+    fn tag_pages() {
+        let page = r#"{"name":"a/b","tags":["experimental","0.1.0-experimental.58"]}"#;
+        assert_eq!(
+            tags_in_page(page).unwrap(),
+            vec!["experimental", "0.1.0-experimental.58"]
+        );
+        assert!(
+            tags_in_page(r#"{"name":"a/b","tags":null}"#)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(tags_in_page("not json").is_err());
     }
 
     #[test]

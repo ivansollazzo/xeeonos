@@ -75,6 +75,51 @@ pub fn is_valid_channel(name: &str) -> bool {
     is_number(major) && is_number(minor) && matches!(stage, "alpha" | "beta" | "stable")
 }
 
+/// The channels that follow the newest version instead of one minor
+/// version: `stable` (the newest stable), `beta` (the newest beta, or a
+/// newer stable), `alpha` (the newest alpha, or a newer beta or stable).
+pub const FOLLOWING: [&str; 3] = ["stable", "beta", "alpha"];
+
+/// The stages a following channel accepts, from the most stable.
+fn stages_for(following: &str) -> &'static [&'static str] {
+    match following {
+        "stable" => &["stable"],
+        "beta" => &["stable", "beta"],
+        "alpha" => &["stable", "beta", "alpha"],
+        _ => &[],
+    }
+}
+
+/// Where a following channel can go, among the `published` channels: those
+/// of the highest minor version with a stage it accepts (e.g. for `beta`,
+/// with 1.1-stable, 2.0-beta and 2.1-alpha published: 2.0-beta). A newer
+/// minor version is always newer, whatever its stage; inside one minor
+/// version the caller compares the versions the channels have.
+pub fn candidates(following: &str, published: &[String]) -> Vec<String> {
+    let stages = stages_for(following);
+    let parsed: Vec<((u64, u64), &String)> = published
+        .iter()
+        .filter(|c| c.as_str() != "experimental" && is_valid_channel(c))
+        .filter_map(|c| {
+            let (number, stage) = c.split_once('-')?;
+            let (major, minor) = number.split_once('.')?;
+            stages
+                .contains(&stage)
+                .then_some(((major.parse().ok()?, minor.parse().ok()?), c))
+        })
+        .collect();
+    let Some(top) = parsed.iter().map(|(n, _)| *n).max() else {
+        return Vec::new();
+    };
+    let mut out: Vec<String> = parsed
+        .into_iter()
+        .filter(|(n, _)| *n == top)
+        .map(|(_, c)| c.clone())
+        .collect();
+    out.sort();
+    out
+}
+
 fn is_number(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
 }
@@ -82,10 +127,32 @@ fn is_number(s: &str) -> bool {
 /// Compare two versions the way people expect: numbers by value, so that
 /// `0.1.0-experimental.12` is newer than `0.1.0-experimental.9`.
 ///
-/// Both strings are cut into runs of digits and runs of other characters;
-/// runs of digits compare as numbers, the rest as text. A version that is a
-/// prefix of the other is older (`1.0` < `1.0.1`).
+/// First the release (`1.2.0`), then the part after `-`: a release is
+/// newer than its own pre-releases (`1.2.0` > `1.2.0-beta.5`).
+///
+/// Each part is cut into runs of digits and runs of other characters; runs
+/// of digits compare as numbers, the rest as text. A part that is a prefix
+/// of the other is older (`1.0` < `1.0.1`).
 pub fn compare(a: &str, b: &str) -> Ordering {
+    let (release_a, pre_a) = split_pre(a);
+    let (release_b, pre_b) = split_pre(b);
+    compare_runs(release_a, release_b).then_with(|| match (pre_a, pre_b) {
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less,
+        (Some(pa), Some(pb)) => compare_runs(pa, pb),
+    })
+}
+
+/// `1.2.0-beta.5` -> (`1.2.0`, Some(`beta.5`)).
+fn split_pre(v: &str) -> (&str, Option<&str>) {
+    match v.split_once('-') {
+        Some((release, pre)) => (release, Some(pre)),
+        None => (v, None),
+    }
+}
+
+fn compare_runs(a: &str, b: &str) -> Ordering {
     let (mut a, mut b) = (a, b);
     loop {
         match (a.is_empty(), b.is_empty()) {
@@ -161,6 +228,37 @@ mod tests {
     }
 
     #[test]
+    fn following() {
+        let published: Vec<String> = [
+            "experimental",
+            "0.1.0-experimental.58",
+            "1.0-stable",
+            "1.1-stable",
+            "1.1-beta",
+            "2.0-beta",
+            "2.1-alpha",
+            "1.0.0",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        assert_eq!(candidates("stable", &published), vec!["1.1-stable"]);
+        assert_eq!(candidates("beta", &published), vec!["2.0-beta"]);
+        assert_eq!(candidates("alpha", &published), vec!["2.1-alpha"]);
+        // Same minor version: both, the caller compares their versions.
+        let published = vec!["2.0-beta".to_string(), "2.0-stable".to_string()];
+        assert_eq!(
+            candidates("beta", &published),
+            vec!["2.0-beta", "2.0-stable"]
+        );
+        assert!(candidates("stable", &["experimental".to_string()]).is_empty());
+        assert!(candidates("other", &published).is_empty());
+        // 10.0 is newer than 9.9 (numbers, not text).
+        let published = vec!["9.9-stable".to_string(), "10.0-stable".to_string()];
+        assert_eq!(candidates("stable", &published), vec!["10.0-stable"]);
+    }
+
+    #[test]
     fn version_order() {
         use Ordering::*;
         assert_eq!(
@@ -174,6 +272,11 @@ mod tests {
         assert_eq!(compare("0.1.0-dev.8", "0.1.0-dev.8.1"), Less);
         assert_eq!(compare("1.10.0", "1.9.9"), Greater);
         assert_eq!(compare("2.0.0", "10.0.0"), Less);
+        // A release is newer than its pre-releases, older than the next ones.
+        assert_eq!(compare("1.1.0", "1.1.0-beta.5"), Greater);
+        assert_eq!(compare("1.1.0-alpha.9", "1.1.0-beta.1"), Less);
+        assert_eq!(compare("1.1.0", "1.1.1-beta.1"), Less);
+        assert_eq!(compare("2.0.0-beta.3", "1.1.1-beta.1"), Greater);
     }
 
     #[test]

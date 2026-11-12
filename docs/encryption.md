@@ -51,9 +51,17 @@ and digits are in the same place as on most keyboards; some symbols are not).
   empty password is tried first. If it fails, the password is asked on the
   console.
 - **On**: `systemd-cryptenroll` adds the password and a recovery key, then
-  removes the empty key slot.
-- **Off**: `cryptsetup luksAddKey` adds an empty key slot (checked with the
-  current password), then `systemd-cryptenroll` removes the other slots.
+  removes the empty key slot (`--wipe-slot=empty`). With re-encryption,
+  `cryptsetup reencrypt` keeps only the new password's slot.
+- **Off**: `systemd-cryptenroll` adds an empty password (opened with the
+  current password or the recovery key), then removes the other slots.
+- Whether the password is on is read from the LUKS header: it is on when
+  the recovery key's token is there (xctl adds and removes the two
+  together).
+- The passwords reach these programs through their environment or standard
+  input, never their command line. (cryptsetup's command line cannot use an
+  empty password at all, which is why the empty one is always handled by
+  systemd-cryptenroll.)
 - No TPM for now: it will come with Secure Boot.
 
 Systems installed before encryption existed have an unencrypted data

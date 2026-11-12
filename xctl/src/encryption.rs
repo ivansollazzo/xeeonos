@@ -188,48 +188,60 @@ pub fn show_recovery_key(key: &str) -> Result<()> {
 
 /// Turn the disk password on: add the password and a recovery key, then
 /// remove the empty password. Returns the recovery key.
+///
+/// (cryptsetup's command line cannot use an empty password, so the empty
+/// one is handled by systemd-cryptenroll: `--unlock-key-file=/dev/null` is
+/// an empty key, and `--wipe-slot=empty` finds the slots it opens.)
 pub fn turn_on(password: &str, reencrypt: bool) -> Result<String> {
     if password.is_empty() {
         return Err(err("the disk password cannot be empty"));
     }
     let dev = data_partition()?;
-    let empty = empty_slots(&dev)?;
-    if empty.is_empty() {
+    if password_set(&dev)? {
         return Err(err("the disk password is already on"));
     }
-    if reencrypt {
-        // A new volume key, while the empty password is still the only one
-        // (every key slot must be opened to re-encrypt). Online: the
-        // partition stays in use.
-        crate::util::run(
-            "cryptsetup",
-            &["reencrypt", "--key-file=/dev/null", "--batch-mode", &dev],
-        )?;
-    }
+    let before = slots(&dev)?;
     // The password: systemd-cryptenroll reads it from $NEWPASSWORD.
-    let status = Command::new("systemd-cryptenroll")
-        .args(["--unlock-key-file=/dev/null", "--password", &dev])
-        .env("NEWPASSWORD", password)
-        .stdin(Stdio::null())
-        .status()
-        .map_err(|e| err(format!("cannot run systemd-cryptenroll: {e}")))?;
-    if !status.success() {
-        return Err(err("adding the disk password failed; nothing changed"));
+    cryptenroll(
+        &["--unlock-key-file=/dev/null", "--password"],
+        &dev,
+        &[("NEWPASSWORD", password)],
+    )
+    .map_err(|_| err("adding the disk password failed; nothing changed"))?;
+    if reencrypt {
+        // A new volume key. Only the new password's slot is kept: the empty
+        // password goes away with the old key. Online: the partition stays
+        // in use.
+        let slot = slots(&dev)?
+            .into_iter()
+            .find(|s| !before.contains(s))
+            .ok_or_else(|| err("cannot find the new password's key slot"))?;
+        let mut child = Command::new("cryptsetup")
+            .args([
+                "reencrypt",
+                "--batch-mode",
+                "--key-file=-",
+                &format!("--key-slot={slot}"),
+                &dev,
+            ])
+            .stdin(Stdio::piped())
+            .spawn()
+            .map_err(|e| err(format!("cannot run cryptsetup: {e}")))?;
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(password.as_bytes())?;
+        }
+        if !child.wait()?.success() {
+            return Err(err(
+                "re-encrypting failed: the disk password is on, the empty password may \
+                 still work; try `xctl encryption on --reencrypt` again",
+            ));
+        }
     }
     // The recovery key (printed on standard output), and away with the
-    // empty password (by slot number, found before adding the others).
-    let wipe = empty
-        .iter()
-        .map(u32::to_string)
-        .collect::<Vec<_>>()
-        .join(",");
+    // empty password. Opened with the new password ($PASSWORD).
     let out = Command::new("systemd-cryptenroll")
-        .args([
-            "--unlock-key-file=/dev/null",
-            "--recovery-key",
-            &format!("--wipe-slot={wipe}"),
-            &dev,
-        ])
+        .args(["--recovery-key", "--wipe-slot=empty", &dev])
+        .env("PASSWORD", password)
         .stdin(Stdio::null())
         .stderr(Stdio::inherit())
         .output()
@@ -239,64 +251,61 @@ pub fn turn_on(password: &str, reencrypt: bool) -> Result<String> {
         (true, Some(key)) => Ok(key),
         _ => Err(err(
             "adding the recovery key failed: the disk password is on, but the \
-             empty password still works; try again",
+             empty password may still work; try again",
         )),
     }
 }
 
-/// Turn the disk password off: add the empty password (checked with the
-/// current one), then remove every other key.
+/// Turn the disk password off: add the empty password (opened with the
+/// current password or the recovery key), then remove every other key.
 pub fn turn_off(password: &str) -> Result<()> {
     let dev = data_partition()?;
-    if !empty_slots(&dev)?.is_empty() {
+    if !password_set(&dev)? {
         return Err(err("the disk password is already off"));
     }
     let others = slots(&dev)?;
-    // `luksAddKey <dev> /dev/null`: the new key is empty; the existing key
-    // comes from standard input ("--key-file=-"). PBKDF2 with few rounds:
-    // an empty password needs no slow key derivation, and the start is
-    // faster.
-    let mut child = Command::new("cryptsetup")
-        .args([
-            "luksAddKey",
-            "--key-file=-",
-            "--pbkdf=pbkdf2",
-            "--pbkdf-force-iterations=1000",
-            "--batch-mode",
-            &dev,
-            "/dev/null",
-        ])
-        .stdin(Stdio::piped())
-        .spawn()
-        .map_err(|e| err(format!("cannot run cryptsetup: {e}")))?;
-    if let Some(mut stdin) = child.stdin.take() {
-        // Exactly the password, without a newline (--key-file=- reads it all).
-        stdin.write_all(password.as_bytes())?;
-    }
-    if !child.wait()?.success() {
-        return Err(err("wrong password; nothing changed"));
-    }
+    // Opened with $PASSWORD; the new, empty password from $NEWPASSWORD.
+    cryptenroll(
+        &["--password"],
+        &dev,
+        &[("PASSWORD", password), ("NEWPASSWORD", "")],
+    )
+    .map_err(|_| err("wrong password; nothing changed"))?;
     let wipe = others
         .iter()
         .map(u32::to_string)
         .collect::<Vec<_>>()
         .join(",");
-    let status = Command::new("systemd-cryptenroll")
-        .args([
+    cryptenroll(
+        &[
             "--unlock-key-file=/dev/null",
             &format!("--wipe-slot={wipe}"),
-            &dev,
-        ])
+        ],
+        &dev,
+        &[],
+    )
+    .map_err(|_| {
+        err(
+            "removing the old password failed: the empty password works, but \
+             the old password does too; try again",
+        )
+    })
+}
+
+/// Run systemd-cryptenroll on `dev`, with secrets in the environment.
+fn cryptenroll(args: &[&str], dev: &str, env: &[(&str, &str)]) -> Result<()> {
+    let status = Command::new("systemd-cryptenroll")
+        .args(args)
+        .arg(dev)
+        .envs(env.iter().copied())
         .stdin(Stdio::null())
         .status()
         .map_err(|e| err(format!("cannot run systemd-cryptenroll: {e}")))?;
-    if !status.success() {
-        return Err(err(
-            "removing the old password failed: the empty password works, but \
-             the old password does too; try again",
-        ));
+    if status.success() {
+        Ok(())
+    } else {
+        Err(err("systemd-cryptenroll failed"))
     }
-    Ok(())
 }
 
 /// The encrypted data partition, e.g. /dev/nvme0n1p5: the device below the
@@ -324,9 +333,19 @@ pub fn data_partition() -> Result<String> {
         .ok_or_else(not)
 }
 
-/// Is a disk password needed (no key slot opens with the empty password)?
+/// Is the disk password on? xctl turns it on together with a recovery key,
+/// and removes both when it turns it off: the recovery key's token
+/// ("systemd-recovery") in the LUKS header tells.
 pub fn password_set(dev: &str) -> Result<bool> {
-    Ok(empty_slots(dev)?.is_empty())
+    let json = output("cryptsetup", &["luksDump", "--dump-json-metadata", dev])?;
+    Ok(has_recovery_token(&json))
+}
+
+fn has_recovery_token(json: &str) -> bool {
+    let meta: Value = serde_json::from_str(json).unwrap_or_default();
+    meta["tokens"]
+        .as_object()
+        .is_some_and(|t| t.values().any(|v| v["type"] == "systemd-recovery"))
 }
 
 /// All key slots of the partition.
@@ -343,27 +362,6 @@ fn parse_slots(json: &str) -> Vec<u32> {
         .unwrap_or_default();
     slots.sort();
     slots
-}
-
-/// The key slots that open with the empty password.
-fn empty_slots(dev: &str) -> Result<Vec<u32>> {
-    Ok(slots(dev)?
-        .into_iter()
-        .filter(|s| {
-            Command::new("cryptsetup")
-                .args([
-                    "open",
-                    "--test-passphrase",
-                    "--key-file=/dev/null",
-                    &format!("--key-slot={s}"),
-                    dev,
-                ])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .is_ok_and(|st| st.success())
-        })
-        .collect())
 }
 
 /// The recovery key in systemd-cryptenroll's output: 8 groups of 8
@@ -404,5 +402,9 @@ mod tests {
     fn keyslots() {
         let json = r#"{"keyslots":{"0":{"type":"luks2"},"2":{"type":"luks2"}},"tokens":{}}"#;
         assert_eq!(parse_slots(json), vec![0, 2]);
+        assert!(!has_recovery_token(json));
+        let on =
+            r#"{"keyslots":{"1":{}},"tokens":{"0":{"type":"systemd-recovery","keyslots":["1"]}}}"#;
+        assert!(has_recovery_token(on));
     }
 }

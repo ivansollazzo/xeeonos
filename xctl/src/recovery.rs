@@ -27,6 +27,10 @@ const ACTIONS: &[(&str, &str)] = &[
         "Reinstall XeeonOS (keeps users, files and settings)",
     ),
     ("rollback", "Go back to the previous version"),
+    (
+        "restore",
+        "Restore data (settings and files) from a snapshot",
+    ),
     ("network", "Network settings (Wi-Fi, wired, ...)"),
     ("encryption", "Disk password (turn on or off)"),
     ("shell", "Shell (needs an administrator's password)"),
@@ -184,9 +188,16 @@ fn perform(action: &str, yes: bool) -> Result<()> {
     match action {
         "reinstall" => reinstall(yes),
         "rollback" => {
-            boot::rollback(&[])?;
+            // The menu already asked which action; --yes skips the question.
+            let args = if yes {
+                vec!["--yes".to_string()]
+            } else {
+                Vec::new()
+            };
+            boot::rollback(&args)?;
             offer_reboot(yes)
         }
+        "restore" => crate::snapshots::screen(),
         "network" => crate::network::screen().map(|_| ()),
         "shell" => shell(),
         "encryption" => crate::encryption::screen(),

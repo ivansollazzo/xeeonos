@@ -1,0 +1,22 @@
+# The firewall: closed to incoming connections, before any network comes up.
+# Rules and open ports: `xctl firewall` (docs/firewall.md).
+[Unit]
+Description=XeeonOS firewall
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/firewall.md
+DefaultDependencies=no
+# nft reads /etc/protocols ("icmp"), which at the first boot is linked from
+# /usr/share/factory/etc by systemd-tmpfiles.
+After=local-fs.target systemd-tmpfiles-setup.service
+Before=network-pre.target shutdown.target
+Wants=network-pre.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/xctl firewall load
+ExecReload=/usr/bin/xctl firewall load
+ExecStop=/usr/bin/nft destroy table inet xeeonos
+
+[Install]
+WantedBy=sysinit.target

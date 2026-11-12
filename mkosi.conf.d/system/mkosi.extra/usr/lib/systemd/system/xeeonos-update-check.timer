@@ -1,0 +1,11 @@
+# Once a day (the first time a few minutes after starting).
+[Unit]
+Description=Check for a new XeeonOS version every day
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1d
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

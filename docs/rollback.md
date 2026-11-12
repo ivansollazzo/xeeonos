@@ -29,15 +29,27 @@ and the live ISO, still open the emergency shell.
 ## Manual: `xctl rollback`
 
 ```sh
-sudo xctl rollback      # the running version is marked bad
+sudo xctl rollback      # asks first, then marks the running version bad
                         # (xeeonos_<version>+0-<n>.efi); restart to go back
+sudo xctl rollback --yes   # without asking (scripts)
 ```
+
+It also works from the Recovery menu.
 
 It goes to the newest older version that is not bad, and only if its `/usr`
 slot is still on the disk.
 
-A bad version is not installed again by `xctl update`: it waits for a newer
-one.
+A bad (turned off) version, whether it failed to start or you went back from
+it, can always be installed again with `sudo xctl update`: the copy on the
+disk is removed (its kernel leaves the boot menu, its `/usr` slot is labeled
+`_empty`) and the version is downloaded and written again, since that copy
+may be damaged. The daily check does not offer a turned-off version again,
+so it does not come back every day; `xctl status` says it is turned off. To
+have the daily check offer it anyway, write in `/etc/xeeonos/update.conf`:
+
+```ini
+OfferFailed=yes
+```
 
 `xctl status` shows the boot menu with the state of each version (good, new
 with attempts left, bad) and which one is running.
@@ -46,7 +58,8 @@ with attempts left, bad) and which one is running.
 
 CI (`tools/ci/update.sh`), after the update test, on the same disk:
 
-1. `xctl rollback` on N+1, restart: N runs, N+1 is shown as bad.
-2. Update to a broken N+2 (the start of its `/usr` overwritten, so dm-verity
-   refuses it): it installs, fails to start 3 times, and N starts again with
-   N+2 shown as bad.
+1. `xctl rollback --yes` on N+1, restart: N runs, N+1 is shown as bad.
+2. The check does not offer N+1; `xctl update` writes it again; it starts.
+3. Update to a broken N+2 (the start of its `/usr` overwritten, so dm-verity
+   refuses it), after going back to N again: it installs, fails to start 3
+   times, and N starts again with N+2 shown as bad.

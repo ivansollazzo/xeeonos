@@ -1,0 +1,24 @@
+# The swap file (docs/maintenance.md): the reserve behind zram, used only when
+# compressed memory is full (priority 10, zram has 100), and the place where
+# hibernation saves the memory. Created at the first boot, then switched on
+# at every boot.
+[Unit]
+Description=Swap file
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/maintenance.md
+DefaultDependencies=no
+ConditionPathIsMountPoint=/
+# Only the root file system is needed. Not After=local-fs.target: that
+# waits for tmp.mount, which itself waits for swap.target (an ordering cycle,
+# which systemd breaks by skipping one of the units).
+RequiresMountsFor=/swap
+Before=swap.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/xeeonos/swapfile
+ExecStop=/usr/bin/swapoff /swap/swapfile
+
+[Install]
+WantedBy=swap.target

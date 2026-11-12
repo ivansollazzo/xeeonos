@@ -1,0 +1,106 @@
+name: Arch snapshot
+
+# On request (Actions > Arch snapshot > Run workflow), a pull request that moves XeeonOS to a newer snapshot of the
+# Arch Linux Archive (Snapshot= in mkosi.conf): new kernel, libraries and
+# security fixes, while every build stays reproducible. The pull request is
+# tested like any other and merged by hand.
+#
+# Its description (tools/snapshot-report.py) lists the Arch news published
+# since the current snapshot and the packages of XeeonOS that change. When
+# there is news or a new major version of an important package, the pull
+# request is a draft: read the news first. Arch supports only whole
+# upgrades, so a risky week is skipped by not merging; the next run moves the
+# same pull request (branch arch-snapshot) to a newer date.
+#
+# Needs the secret XEEONOS_BOT_TOKEN: a fine-grained token for this repository
+# with "Contents" and "Pull requests" read/write. (Pull requests opened with
+# the workflow's own token would not start the CI.) Without it, the workflow
+# only says what it would do.
+#
+# For now it runs only by hand: XeeonOS stays on the current snapshot until
+# we choose how often to move (daily or weekly: add a `schedule:` here).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: experimental
+
+      - name: Pick the newest complete snapshot
+        run: |
+          current=$(sed -n 's/^Snapshot=//p' mkosi.conf)
+          # Yesterday's snapshot: today's may still be being written.
+          for days in 1 2 3 4 5 6 7; do
+            date=$(date -u -d "$days days ago" +%Y/%m/%d)
+            if curl -sSf -o /dev/null "https://archive.archlinux.org/repos/$date/core/os/x86_64/core.db"; then
+              break
+            fi
+            date=""
+          done
+          if [[ -z $date ]]; then
+            echo "::error::no Arch snapshot found in the last 7 days"
+            exit 1
+          fi
+          echo "CURRENT=$current" >> "$GITHUB_ENV"
+          echo "NEW=$date" >> "$GITHUB_ENV"
+          echo "Current snapshot $current, newest $date" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Analyse the changes
+        if: env.NEW != env.CURRENT
+        run: |
+          status=0
+          python3 -I tools/snapshot-report.py "$CURRENT" "$NEW" > "$RUNNER_TEMP/report.md" || status=$?
+          if (( status != 0 && status != 10 )); then
+            exit "$status"
+          fi
+          echo "ATTENTION=$(( status == 10 ))" >> "$GITHUB_ENV"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open or update the pull request
+        if: env.NEW != env.CURRENT
+        env:
+          GH_TOKEN: ${{ secrets.XEEONOS_BOT_TOKEN }}
+        run: |
+          if [[ -z $GH_TOKEN ]]; then
+            echo "::warning::XEEONOS_BOT_TOKEN is not set: no pull request (would move $CURRENT -> $NEW)"
+            exit 0
+          fi
+          branch=arch-snapshot
+          sed -i "s|^Snapshot=.*|Snapshot=$NEW|" mkosi.conf
+          git config user.name "xeeonos-bot"
+          git config user.email "xeeonos-bot@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "Arch snapshot $NEW"
+          # The bot's own branch: always one commit on top of experimental.
+          git push --force "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY" "$branch"
+          {
+            echo "Moves the Arch Linux Archive snapshot from $CURRENT to $NEW."
+            echo
+            if (( ATTENTION )); then
+              echo "**Draft: there is Arch news or a new major version below. Read it, then mark the pull request ready and merge when the CI is green; or leave it open to skip this week.**"
+            else
+              echo "Nothing special this week: merge when the CI is green."
+            fi
+            echo
+            cat "$RUNNER_TEMP/report.md"
+          } > "$RUNNER_TEMP/body.md"
+          title="Arch snapshot $NEW"
+          number=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')
+          if [[ -n $number ]]; then
+            gh pr edit "$number" --title "$title" --body-file "$RUNNER_TEMP/body.md"
+            if (( ATTENTION )); then
+              gh pr ready "$number" --undo || true
+            fi
+          else
+            draft=()
+            (( ATTENTION )) && draft=(--draft)
+            gh pr create --base experimental --head "$branch" "${draft[@]}" \
+              --title "$title" --body-file "$RUNNER_TEMP/body.md"
+          fi

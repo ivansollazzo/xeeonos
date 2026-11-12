@@ -2,6 +2,12 @@
 # distribution defaults; keep this list short (principle: on-demand services).
 enable NetworkManager.service
 enable systemd-timesyncd.service
+# Stops what fills the memory before the computer freezes (see the
+# -.slice.d and user@.service.d drop-ins).
+enable systemd-oomd.service
+enable systemd-oomd.socket
+# Saves the kernel's last words after a crash (shown by `xctl report`).
+enable systemd-pstore.service
 # NetworkManager is the network stack; systemd-networkd (enabled by systemd's
 # own presets) would compete with it, and its wait-online service would hang
 # anything that waits for the network.

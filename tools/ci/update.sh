@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# First boot, A/B update over HTTP, rollback, and the automatic fallback after
-# a broken update. These steps form one story on one disk: each step starts
+# First boot, A/B update over HTTP, rollback and installing the version left
+# again, and the automatic fallback after a broken update. These steps form one story on one disk: each step starts
 # from the disk the previous one left.
 source "$(dirname "$0")/common.sh"
 BROKEN=$VERSION.2   # a broken version after the next one
@@ -47,6 +47,7 @@ tools/boot-test.sh \
     --expect "xeeonos_$NEXT  \(running\)" \
     --expect "xeeonos_${VERSION}[[:space:]]*\$" \
     --expect "$NEXT +good, running" \
+    --expect "Snapshot: +.*-before-$NEXT" \
     --expect "check: sealed system OK" \
     out/disk.raw out/serial-3-after-update.log
 echo "::endgroup::"
@@ -59,7 +60,7 @@ tools/boot-test.sh --http out/manifest-only "${keyring[@]}" --run "$check" \
 echo "::endgroup::"
 
 echo "::group::4. xctl rollback"
-tools/boot-test.sh --run "/usr/bin/xctl rollback" \
+tools/boot-test.sh --run "/usr/bin/xctl rollback --yes" \
     --expect "XeeonOS $NEXT is disabled. Restart to go back to XeeonOS $VERSION\." \
     out/disk.raw out/serial-4-rollback.log
 echo "::endgroup::"
@@ -70,12 +71,42 @@ tools/boot-test.sh \
     --expect "$VERSION +good, running" \
     --expect "$NEXT +bad" \
     --expect "check: sealed system OK" \
+    --expect "XeeonOS $NEXT is turned off here" \
     out/disk.raw out/serial-5-after-rollback.log
+echo "::endgroup::"
+
+# A version turned off (by a rollback, or after failing to start) is not
+# offered again by the daily check, but `xctl update` installs it again,
+# writing it from scratch (the copy on the disk may be damaged).
+echo "::group::5b. Turned off: not offered by the check, installed again by xctl update"
+tools/boot-test.sh --http build/update-next "${keyring[@]}" --run "$check" \
+    --expect "XeeonOS $NEXT is turned off on this computer" \
+    --expect "The copy of XeeonOS $NEXT on this computer was removed" \
+    --expect "XeeonOS $NEXT is installed" \
+    out/disk.raw out/serial-5b-reinstall.log
+echo "::endgroup::"
+
+echo "::group::5c. The version installed again boots"
+tools/boot-test.sh \
+    --expect "XeeonOS $NEXT \(build" \
+    --expect "$NEXT +good, running" \
+    --expect "check: sealed system OK" \
+    out/disk.raw out/serial-5c-after-reinstall.log
 echo "::endgroup::"
 
 # The next version under a newer number, with the start of its /usr
 # overwritten: it installs fine (the files match the signed manifest) but
-# cannot start, because dm-verity refuses the damaged blocks.
+# cannot start, because dm-verity refuses the damaged blocks. It replaces the
+# next version's slot, so no intact copy of that /usr is left to start from.
+# (A copy of the first version would not do: the boot menu sorts by the
+# version inside the kernel file, so it would come after the running one.)
+# Back to the first version, so that the broken one replaces the next one.
+echo "::group::5d. xctl rollback again"
+tools/boot-test.sh --run "/usr/bin/xctl rollback --yes" \
+    --expect "XeeonOS $NEXT is disabled. Restart to go back to XeeonOS $VERSION\." \
+    out/disk.raw out/serial-5d-rollback-again.log
+echo "::endgroup::"
+
 echo "::group::6. Install a broken version"
 src=out/broken-src
 mkdir -p "$src"

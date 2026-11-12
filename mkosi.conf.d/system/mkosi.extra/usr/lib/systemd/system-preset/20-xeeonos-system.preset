@@ -1,0 +1,12 @@
+# Services of the installed system (not of the live ISO), enabled by default.
+enable xeeonos-firewall.service
+enable xeeonos-update-check.timer
+enable xeeonos-scrub.timer
+# Disk health (Btrfs errors, SMART), daily.
+enable xeeonos-health.timer
+# The swap file behind zram (created at the first boot).
+enable xeeonos-swapfile.service
+# TRIM for the SSD, once a week (util-linux).
+enable fstrim.timer
+# Firmware metadata (fwupd), so that `fwupdmgr get-updates` knows what is new.
+enable fwupd-refresh.timer

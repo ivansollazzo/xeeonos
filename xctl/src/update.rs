@@ -83,9 +83,18 @@ pub fn run(args: &[String]) -> Result<()> {
     let source = match from {
         Some(f) => Source::parse(&f),
         None => {
-            let channel = channel::current()?.ok_or_else(|| {
-                err("this is a development build without an update channel; use --from <source>")
-            })?;
+            let Some(channel) = channel::current()? else {
+                if check {
+                    // The daily check on a development build: nothing to follow.
+                    println!(
+                        "This is a development build without an update channel: nothing to check."
+                    );
+                    return Ok(());
+                }
+                return Err(err(
+                    "this is a development build without an update channel; use --from <source>",
+                ));
+            };
             Source::Oci(format!("{}:{channel}", config::REGISTRY))
         }
     };
@@ -110,6 +119,8 @@ pub fn run(args: &[String]) -> Result<()> {
         .into_iter()
         .max_by(|a, b| compare(a, b))
         .ok_or_else(|| err("the source contains no XeeonOS version"))?;
+    // Whatever the outcome, the "update available" note is refreshed below.
+    set_available(None);
     match compare(&new, &current) {
         Ordering::Equal => {
             println!("XeeonOS {current} is up to date.");
@@ -123,15 +134,20 @@ pub fn run(args: &[String]) -> Result<()> {
         }
         Ordering::Greater => {}
     }
-    // A version that already failed to start here (or was rolled back) is
-    // not installed again: wait for a newer one.
-    if boot::bad_versions().contains(&new) {
+    // A version turned off here (it failed to start 3 times, or the
+    // administrator went back from it with `xctl rollback`): `sudo xctl
+    // update` installs it again from scratch, but the daily check does not
+    // offer it again, unless update.conf says OfferFailed=yes.
+    let turned_off = boot::bad_versions().contains(&new);
+    if check && turned_off && !offer_failed() {
         println!(
-            "XeeonOS {new} did not work on this computer and was disabled: waiting for a newer version."
+            "XeeonOS {new} is turned off on this computer (it did not start, or you went back \
+             from it): not offered again. To install it again: sudo xctl update"
         );
         return Ok(());
     }
     if check {
+        set_available(Some(&new));
         println!(
             "XeeonOS {new} is available (running: {current}). Install it with: sudo xctl update"
         );
@@ -141,11 +157,147 @@ pub fn run(args: &[String]) -> Result<()> {
     // Only now the large files.
     fetch_files(&source, cache, &names)?;
     check_hashes(cache)?;
+    // The copy of a turned-off version still on the disk may be damaged:
+    // it is written again from the verified download, never reused.
+    if turned_off {
+        forget(&new)?;
+    }
+    check_boot_space(cache, &new, &current)?;
+    // A copy of the data to go back to (xctl snapshots), if it can be taken.
+    match crate::snapshots::create(&format!("before-{new}")) {
+        Ok(name) => println!("Snapshot of the data: {name}"),
+        Err(e) => println!("No snapshot of the data: {e}"),
+    }
     println!("Installing XeeonOS {new} (running: {current})...");
     // The files were verified above against the signed manifest.
     run_program(config::SYSUPDATE, &["update", &new])?;
     println!("XeeonOS {new} is installed. Restart to start using it.");
     Ok(())
+}
+
+/// Does update.conf ask the daily check to offer turned-off versions too?
+/// (`OfferFailed=yes`; the default is no.)
+fn offer_failed() -> bool {
+    fs::read_to_string(config::UPDATE_CONF)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| l.split_once('='))
+        .any(|(k, v)| k.trim() == "OfferFailed" && matches!(v.trim(), "yes" | "true" | "1"))
+}
+
+/// Remove an installed, turned-off version, so that systemd-sysupdate
+/// installs it again from scratch: its kernel leaves the boot menu, and its
+/// /usr partitions are labeled "_empty", the label sysupdate gives (and
+/// looks for in) a free slot. Never the running version (the caller only
+/// passes a newer one).
+fn forget(version: &str) -> Result<()> {
+    let esp = boot::esp();
+    for entry in boot::entries(&esp)? {
+        if entry.version == version {
+            fs::remove_file(esp.join("EFI/Linux").join(&entry.file))?;
+        }
+    }
+    let label = format!("xeeonos_{version}");
+    let list = output(
+        "lsblk",
+        &[
+            "--raw",
+            "--noheadings",
+            "--output",
+            "PARTLABEL,PKNAME,PARTN",
+        ],
+    )?;
+    for line in list.lines() {
+        let mut w = line.split_whitespace();
+        if let (Some(l), Some(disk), Some(n)) = (w.next(), w.next(), w.next())
+            && l == label
+        {
+            // The disk is in use: write the table only, sysupdate reads it
+            // from the disk itself.
+            run_program(
+                "sfdisk",
+                &[
+                    "--quiet",
+                    "--no-reread",
+                    "--no-tell-kernel",
+                    "--part-label",
+                    &format!("/dev/{disk}"),
+                    n,
+                    "_empty",
+                ],
+            )?;
+        }
+    }
+    println!("The copy of XeeonOS {version} on this computer was removed; installing it again.");
+    Ok(())
+}
+
+/// Is there room on the boot partition for the new kernel? Checked before
+/// anything is written, so that an update never stops half way.
+/// systemd-sysupdate keeps 2 versions (InstancesMax=2): before writing the
+/// new one it removes every version but the running one, so their space
+/// counts as free.
+fn check_boot_space(dir: &Path, new: &str, current: &str) -> Result<()> {
+    let need = fs::metadata(dir.join(format!("xeeonos_{new}.efi")))?.len();
+    let esp = boot::esp();
+    let avail = output(
+        "df",
+        &["--output=avail", "--block-size=1", &esp.to_string_lossy()],
+    )?;
+    let mut free: u64 = avail
+        .lines()
+        .nth(1)
+        .and_then(|l| l.trim().parse().ok())
+        .ok_or_else(|| err(format!("cannot read the free space of {}", esp.display())))?;
+    for entry in boot::entries(&esp)? {
+        if entry.version != current
+            && let Ok(meta) = fs::metadata(esp.join("EFI/Linux").join(&entry.file))
+        {
+            free += meta.len();
+        }
+    }
+    if !fits(need, free) {
+        return Err(err(format!(
+            "not enough space on the boot partition ({}) for XeeonOS {new}: it needs {} MB, \
+             {} MB can be made free. Nothing was changed. Please report this problem.",
+            esp.display(),
+            need / MB,
+            free / MB
+        )));
+    }
+    Ok(())
+}
+
+const MB: u64 = 1024 * 1024;
+
+/// The kernel fits, with 16 MB to spare (boot loader files, the file system).
+fn fits(need: u64, free: u64) -> bool {
+    need + 16 * MB <= free
+}
+
+/// Remember (or forget) that a newer version is available, for the message
+/// at login and `xctl status`. Only root can write it (the daily check runs as
+/// root); for others this does nothing.
+fn set_available(version: Option<&str>) {
+    let file = Path::new(config::UPDATE_AVAILABLE);
+    match version {
+        Some(v) => {
+            if let Some(dir) = file.parent() {
+                let _ = fs::create_dir_all(dir);
+            }
+            let _ = fs::write(file, format!("{v}\n"));
+        }
+        None => {
+            let _ = fs::remove_file(file);
+        }
+    }
+}
+
+/// The version noted by the last check, if a newer one is available.
+pub fn available() -> Option<String> {
+    let v = fs::read_to_string(config::UPDATE_AVAILABLE).ok()?;
+    let v = v.trim();
+    (!v.is_empty()).then(|| v.to_string())
 }
 
 /// Removes a directory when it goes out of scope (Rust's "Drop" trait).
@@ -400,6 +552,12 @@ mod tests {
         assert!(manifest_files("abc  /etc/passwd\n").is_err());
         assert!(manifest_files("abc  .hidden\n").is_err());
         assert!(manifest_files("abc\n").is_err());
+    }
+
+    #[test]
+    fn boot_space() {
+        assert!(fits(450 * MB, 500 * MB));
+        assert!(!fits(450 * MB, 460 * MB));
     }
 
     #[test]

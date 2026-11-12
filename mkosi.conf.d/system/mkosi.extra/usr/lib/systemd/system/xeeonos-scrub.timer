@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the data partition for damage every month
+
+[Timer]
+OnCalendar=monthly
+Persistent=true
+RandomizedDelaySec=1d
+
+[Install]
+WantedBy=timers.target

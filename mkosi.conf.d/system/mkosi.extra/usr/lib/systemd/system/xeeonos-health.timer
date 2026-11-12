@@ -1,0 +1,10 @@
+# Once a day (the first time a few minutes after starting).
+[Unit]
+Description=Check the health of the disk every day
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1d
+
+[Install]
+WantedBy=timers.target

@@ -144,8 +144,12 @@ fn has_recovery_word(cmdline: &str) -> bool {
 
 /// `xctl rollback`
 pub fn rollback(args: &[String]) -> Result<()> {
-    if let Some(arg) = args.first() {
-        return Err(err(format!("unknown option for rollback: {arg}")));
+    let mut yes = false;
+    for arg in args {
+        match arg.as_str() {
+            "--yes" => yes = true,
+            other => return Err(err(format!("unknown option for rollback: {other}"))),
+        }
     }
     need_root("rollback")?;
 
@@ -168,6 +172,24 @@ pub fn rollback(args: &[String]) -> Result<()> {
             "the /usr of XeeonOS {} is no longer on this disk",
             target.version
         )));
+    }
+
+    if !yes {
+        if !crate::ui::interactive() {
+            return Err(err(
+                "no terminal to ask \"Go back to the previous version?\" on (give --yes)",
+            ));
+        }
+        let question = format!(
+            "Go back to XeeonOS {}?\n\nXeeonOS {current} will be turned off until the next \
+             `sudo xctl update`, which installs it again. Your files and settings are not \
+             touched.",
+            target.version
+        );
+        if !crate::ui::yes_no("Rollback", &question, true)? {
+            println!("Nothing changed.");
+            return Ok(());
+        }
     }
 
     // Mark the running version as bad: 0 attempts left.

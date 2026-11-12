@@ -142,6 +142,9 @@ jobs:
           - {test: recovery, artifacts: disk-image}
           - {test: network, artifacts: disk-image}
           - {test: encryption, artifacts: disk-image}
+          - {test: base, artifacts: disk-image}
+          - {test: snapshots, artifacts: disk-image}
+          - {test: hibernate, artifacts: disk-image}
           - {test: iso-install, artifacts: '{live,update-system}'}
           - {test: iso-alongside, artifacts: '{live,update-system}'}
     steps:

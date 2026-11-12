@@ -1,0 +1,11 @@
+# Is there a new XeeonOS version? Downloads only the small signed manifest;
+# installs nothing (`sudo xctl update` does). The answer is shown at login
+# and by `xctl status`.
+[Unit]
+Description=Check for a new XeeonOS version
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/maintenance.md
+After=network.target NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/xctl update --check

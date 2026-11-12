@@ -24,6 +24,7 @@
 //! layout.
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -47,13 +48,14 @@ const ESP_NEEDS_BYTES: u64 = 300 * 1024 * 1024;
 /// GPT types (Discoverable Partitions Specification).
 const ESP_TYPE: &str = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b";
 const XBOOTLDR_TYPE: &str = "bc13c2ff-59e6-4262-a352-b275fd6f7172";
+const USR_VERITY_TYPE: &str = "77ff5f63-e7b6-4633-acf4-1565b864c0e6";
 /// Partitions of these types would be taken for XeeonOS's own at its first
 /// boot (systemd-repart matches partitions by type): XeeonOS is not
 /// installed next to a system that has them.
 const OWN_TYPES: &[(&str, &str)] = &[
     ("4f68bce3-e8cd-4db1-96e7-fbcaf984b709", "root"),
     (crate::config::USR_PARTITION_TYPE, "/usr"),
-    ("77ff5f63-e7b6-4633-acf4-1565b864c0e6", "/usr verity"),
+    (USR_VERITY_TYPE, "/usr verity"),
     (XBOOTLDR_TYPE, "boot (XBOOTLDR)"),
 ];
 
@@ -231,33 +233,11 @@ pub fn run_install(args: &[String]) -> Result<()> {
         "Installing XeeonOS",
         &format!("Creating the partitions on {}...", disk.path),
     );
-    let defs = TempDir::new("xctl-install-repart")?;
-    write_definitions(&defs.0, &payload, new_boot)?;
     // (The ESP may just have been mounted to measure it: let udev finish.)
     let _ = run("udevadm", &["settle"]);
-    // SYSTEMD_LOG_TARGET=console: its messages on the screen, also when the
-    // installer runs as a service (tests), not only in the journal.
-    let status = Command::new("systemd-repart")
-        .args([
-            // The whole disk: a new partition table. The free space: the
-            // existing partitions stay as they are.
-            if space == Space::Whole {
-                "--empty=force"
-            } else {
-                "--empty=refuse"
-            },
-            "--dry-run=no",
-            &format!("--definitions={}", defs.0.display()),
-            &disk.path,
-        ])
-        .env("SYSTEMD_LOG_TARGET", "console")
-        .status()
-        .map_err(|e| err(format!("cannot run systemd-repart: {e}")))?;
-    if !status.success() {
-        return Err(err(format!(
-            "creating the partitions on {} failed (see the messages above)",
-            disk.path
-        )));
+    match space {
+        Space::Whole => repart_whole_disk(&disk.path, &payload)?,
+        Space::Free { .. } => append_partitions(&disk.path, &payload, new_boot)?,
     }
     // Wait until udev has created the device nodes of the new partitions.
     run("udevadm", &["settle"])?;
@@ -356,6 +336,75 @@ fn dashed_uuid(hex: &str) -> Result<String> {
 
 fn by_partuuid(uuid: &str) -> PathBuf {
     Path::new("/dev/disk/by-partuuid").join(uuid)
+}
+
+/// The whole disk: a new partition table, made by systemd-repart.
+fn repart_whole_disk(disk: &str, payload: &Payload) -> Result<()> {
+    let defs = TempDir::new("xctl-install-repart")?;
+    write_definitions(&defs.0, payload, NewBoot::Esp)?;
+    // SYSTEMD_LOG_TARGET=console: its messages on the screen, also when the
+    // installer runs as a service (tests), not only in the journal.
+    let status = Command::new("systemd-repart")
+        .args([
+            "--empty=force",
+            "--dry-run=no",
+            &format!("--definitions={}", defs.0.display()),
+            disk,
+        ])
+        .env("SYSTEMD_LOG_TARGET", "console")
+        .status()
+        .map_err(|e| err(format!("cannot run systemd-repart: {e}")))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(err(format!(
+            "creating the partitions on {disk} failed (see the messages above)"
+        )))
+    }
+}
+
+/// Next to another system: the new partitions go into the free space with
+/// `sfdisk --append`, which never touches the existing ones. (systemd-repart
+/// refuses to place new partitions after partitions it does not manage.)
+fn append_partitions(disk: &str, p: &Payload, boot: NewBoot) -> Result<()> {
+    let v = &p.version;
+    let mut script = String::new();
+    match boot {
+        NewBoot::Esp => script.push_str(&format!("size=1GiB, type={ESP_TYPE}, name=\"ESP\"\n")),
+        NewBoot::Xbootldr => script.push_str(&format!(
+            "size=1GiB, type={XBOOTLDR_TYPE}, name=\"XBOOTLDR\"\n"
+        )),
+        NewBoot::None => {}
+    }
+    script.push_str(&format!(
+        "size=128MiB, type={USR_VERITY_TYPE}, uuid={}, name=\"xeeonos_{v}\"\n",
+        p.verity_uuid
+    ));
+    script.push_str(&format!(
+        "size=8GiB, type={}, uuid={}, name=\"xeeonos_{v}\"\n",
+        config::USR_PARTITION_TYPE,
+        p.usr_uuid
+    ));
+    let mut child = Command::new("sfdisk")
+        .args(["--append", "--quiet", disk])
+        .stdin(Stdio::piped())
+        .spawn()
+        .map_err(|e| err(format!("cannot run sfdisk: {e}")))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(script.as_bytes())?;
+    }
+    if !child.wait()?.success() {
+        return Err(err(format!("creating the partitions on {disk} failed")));
+    }
+    run("udevadm", &["settle"])?;
+    // The new boot partition needs a file system (FAT, as the ESP).
+    let (kind, label) = match boot {
+        NewBoot::Esp => (ESP_TYPE, "ESP"),
+        NewBoot::Xbootldr => (XBOOTLDR_TYPE, "XBOOTLDR"),
+        NewBoot::None => return Ok(()),
+    };
+    let part = partition_of_type(disk, kind)?;
+    run("mkfs.vfat", &["-F", "32", "-n", label, &part])
 }
 
 /// The systemd-repart definitions: the same ESP and slot A as the disk image

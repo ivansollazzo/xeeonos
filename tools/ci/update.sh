@@ -16,10 +16,23 @@ keyring=(--credential "xctl.keyring=$RUNNER_TEMP/test-keyring.gpg")
 # systemd.run= replaces the boot target, so the normal services (network
 # included) are not started: start the network first.
 update="/bin/sh -c 'systemctl start network-online.target && /usr/bin/xctl update --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring'"
+check="/bin/sh -c 'systemctl start network-online.target && /usr/bin/xctl update --check --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring && /usr/bin/xctl update --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring'"
+# Only the signed manifest of the next version, without its images: the
+# version check must work with it, and must not try to download anything else
+# (it would fail here).
+mkdir -p out/manifest-only
+cp build/update-next/SHA256SUMS build/update-next/SHA256SUMS.gpg out/manifest-only/
 
 echo "::group::1. First boot, sealed /usr"
 fresh_disk
 tools/boot-test.sh out/disk.raw out/serial-1-firstboot.log
+echo "::endgroup::"
+
+echo "::group::1b. The version check sees the next version, downloading only the manifest"
+tools/boot-test.sh --http out/manifest-only "${keyring[@]}" \
+    --run "/bin/sh -c 'systemctl start network-online.target && /usr/bin/xctl update --check --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring'" \
+    --expect "XeeonOS $NEXT is available \(running: $VERSION\)" \
+    out/disk.raw out/serial-1b-check.log
 echo "::endgroup::"
 
 echo "::group::2. Update to the next version over HTTP"
@@ -36,6 +49,13 @@ tools/boot-test.sh \
     --expect "$NEXT +good, running" \
     --expect "check: sealed system OK" \
     out/disk.raw out/serial-3-after-update.log
+echo "::endgroup::"
+
+echo "::group::3b. Already up to date: nothing is downloaded"
+tools/boot-test.sh --http out/manifest-only "${keyring[@]}" --run "$check" \
+    --expect "XeeonOS $NEXT is up to date" \
+    out/disk.raw out/serial-3b-up-to-date.log
+[[ $(grep -c "is up to date" out/serial-3b-up-to-date.log) -ge 2 ]]
 echo "::endgroup::"
 
 echo "::group::4. xctl rollback"

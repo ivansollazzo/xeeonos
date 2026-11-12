@@ -66,6 +66,14 @@ pub fn run_setup(args: &[String]) -> Result<()> {
     if let Some(arg) = args.first() {
         return Err(err(format!("unknown option for setup: {arg}")));
     }
+    // Only once: at the first boot (and again after a factory reset, which
+    // erases /var and with it the marker). Never on a system already set up.
+    if Path::new(DONE).exists() {
+        return Err(err(
+            "this computer is already set up; the setup only runs at the first start \
+             (or after erasing everything from Recovery)",
+        ));
+    }
     need_root("setup")?;
 
     // systemd puts imported credentials in $CREDENTIALS_DIRECTORY.

@@ -29,18 +29,23 @@ Pull requests never publish.
 
 ```sh
 xctl status                      # version, channel, /usr slots
-xctl update                      # newest version of the channel
+xctl update --check              # is there a newer version? (no root, no download)
+sudo xctl update                 # install the newest version of the channel
 xctl update --from /run/media/usb/update        # from a directory
 xctl update --from http://server/xeeonos/       # from a web directory
 xctl channel                     # show the channel
 sudo xctl channel 1.x-beta       # switch channel (stored in /etc/xeeonos/channel)
 ```
 
-`xctl update` downloads the signed manifest first, checks its signature with
-the keys in `/usr/lib/xeeonos/update-keyring.gpg`, downloads the files it
-lists, checks their hashes, and only then runs `systemd-sysupdate`, which
-writes them into the free slot (`/usr/lib/sysupdate.d/`). Updates only move
-forward: a channel with an older version installs nothing.
+`xctl update` downloads only the signed manifest first (a few hundred bytes)
+and checks its signature with the keys in `/usr/lib/xeeonos/update-keyring.gpg`.
+The manifest names the version (`xeeonos_<version>.efi`). If that version is
+not newer than the running one, or already failed to start on this computer,
+it stops there: nothing else is downloaded. Otherwise it downloads the files
+the manifest lists, checks their hashes, and only then runs
+`systemd-sysupdate`, which writes them into the free slot
+(`/usr/lib/sysupdate.d/`). Updates only move forward: a channel with an older
+version installs nothing. `--check` stops after the version check.
 
 ## Channels and versions
 
@@ -78,4 +83,7 @@ Images built before step 2 carry no key and can only be updated with
 
 CI builds every change twice (version N and N+1), boots N, updates it to N+1
 over HTTP with a throwaway key, and boots again to check that N+1 runs from
-the other slot (`tools/ci/update.sh`). Rollback tests follow (see [rollback.md](rollback.md)).
+the other slot (`tools/ci/update.sh`). Against a source holding only the
+signed manifest (no images), `--check` must report the new version before the
+update, and once updated both `--check` and `xctl update` must say "up to
+date": had they tried to download anything, they would have failed. Rollback tests follow (see [rollback.md](rollback.md)).

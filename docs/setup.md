@@ -26,7 +26,8 @@ The root account stays locked: administrators use `sudo`.
 Everything is written to `/etc` and `/home` on the data partition; the sealed
 `/usr` is not touched. The setup runs again after a factory reset
 ([recovery.md](recovery.md)), until it completes once
-(`/var/lib/xeeonos/setup-done`).
+(`/var/lib/xeeonos/setup-done`). After that, `xctl setup` refuses to run:
+change the settings one by one as below.
 
 ## Changing things later
 

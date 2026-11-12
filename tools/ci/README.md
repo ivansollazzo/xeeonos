@@ -7,7 +7,7 @@ own with "Re-run failed jobs".
 
 | Script | What it tests | Uses |
 |---|---|---|
-| `update.sh` | first boot, A/B update, rollback, automatic fallback after a broken update | disk image, next version |
+| `update.sh` | first boot, version check without download, A/B update, rollback, automatic fallback after a broken update | disk image, next version |
 | `setup.sh` | first-boot setup (unattended), no Arch tools | disk image |
 | `recovery.sh` | Recovery: restart into it, then erase everything | disk image |
 | `network.sh` | network settings: manual address, then DHCP | disk image |

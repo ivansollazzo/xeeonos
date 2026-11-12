@@ -1,0 +1,11 @@
+# Is the disk in good shape? Btrfs error counters and SMART; problems are
+# noted for `xctl status` and the login message (docs/maintenance.md).
+[Unit]
+Description=Check the health of the disk
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/maintenance.md
+ConditionPathIsMountPoint=/
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/xctl health
+Nice=19

@@ -108,9 +108,11 @@ Closed to incoming connections by default (`xctl firewall`,
 [docs/firewall.md](docs/firewall.md)). Before every update, settings and
 users' files are saved in a snapshot that Recovery can bring back
 ([docs/snapshots.md](docs/snapshots.md)). A daily check says when an update
-is available; SSD trim, a monthly data check, firmware updates (fwupd) and
-compressed-memory swap are set up out of the box, and `sudo xctl report`
-collects what a bug report needs ([docs/maintenance.md](docs/maintenance.md)).
+is available, and another one watches the disk's health; SSD trim, a
+monthly data check, firmware updates (fwupd), compressed-memory swap with a
+swap file behind it, hibernation and a guard against running out of memory
+are set up out of the box, and `sudo xctl report` collects what a bug report
+needs ([docs/maintenance.md](docs/maintenance.md)).
 
 ## Arch Linux
 

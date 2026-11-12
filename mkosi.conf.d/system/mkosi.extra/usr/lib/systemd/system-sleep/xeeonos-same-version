@@ -1,0 +1,17 @@
+#!/bin/sh
+# Hibernation and updates: a hibernated session can only resume with the
+# kernel that saved it. If an update was installed before hibernating, the
+# boot menu would start the new version, which cannot resume it, and the
+# session would be lost. So the next start is the running version, once
+# (`bootctl set-oneshot @current`); the new one starts at the restart after.
+# (systemd-sleep runs this with "pre"/"post" and the sleep operation.)
+case $2 in
+    hibernate|hybrid-sleep|suspend-then-hibernate) ;;
+    *) exit 0 ;;
+esac
+case $1 in
+    pre) bootctl set-oneshot @current ;;
+    # Woken up (or resumed from memory, with hybrid-sleep): back to normal.
+    post) bootctl set-oneshot "" ;;
+esac
+exit 0

@@ -8,6 +8,7 @@ mod boot;
 mod channel;
 mod encryption;
 mod firewall;
+mod health;
 mod install;
 mod network;
 mod oci;
@@ -34,6 +35,8 @@ mod config {
     /// Written by `xctl update --check` (as root) when a newer version is
     /// available: shown at login and by `xctl status`.
     pub const UPDATE_AVAILABLE: &str = "/var/lib/xeeonos/update-available";
+    /// Disk problems found by the last `xctl health` (xeeonos-health.timer).
+    pub const HEALTH: &str = "/var/lib/xeeonos/health";
     /// The channel chosen by the administrator, if any.
     pub const CHANNEL_FILE: &str = "/etc/xeeonos/channel";
     pub const OS_RELEASE: &str = "/usr/lib/os-release";
@@ -115,6 +118,8 @@ Commands:
                          In Recovery: bring back settings and files as they
                          were in that snapshot (the current state is saved
                          first).
+  health                 Is the disk in good shape? (Btrfs errors, SMART;
+                         checked daily.)
   report                 Write a report for a bug (versions, disks, logs)
                          to /var/tmp, to attach to it.
   help                   Show this help.";
@@ -139,6 +144,7 @@ fn main() {
         "network" => network::run_network(rest),
         "firewall" => firewall::run_firewall(rest),
         "snapshots" => snapshots::run_snapshots(rest),
+        "health" => health::run_health(rest),
         "report" => report::run_report(rest),
         "encryption" => match rest.is_empty() {
             true if ui::interactive() => {

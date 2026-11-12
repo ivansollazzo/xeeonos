@@ -1,0 +1,14 @@
+# Creates the swap file at the first boot (docs/maintenance.md): the reserve
+# behind zram, used only when compressed memory is full, and the place where
+# hibernation saves the memory.
+[Unit]
+Description=Create the swap file
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/maintenance.md
+DefaultDependencies=no
+ConditionPathExists=!/swap/swapfile
+After=local-fs.target
+Before=swap-swapfile.swap
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/xeeonos/make-swapfile

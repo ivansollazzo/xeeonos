@@ -153,6 +153,7 @@ pub fn run(args: &[String]) -> Result<()> {
     // Only now the large files.
     fetch_files(&source, cache, &names)?;
     check_hashes(cache)?;
+    check_boot_space(cache, &new, &current)?;
     // A copy of the data to go back to (xctl snapshots), if it can be taken.
     match crate::snapshots::create(&format!("before-{new}")) {
         Ok(name) => println!("Snapshot of the data: {name}"),
@@ -163,6 +164,49 @@ pub fn run(args: &[String]) -> Result<()> {
     run_program(config::SYSUPDATE, &["update", &new])?;
     println!("XeeonOS {new} is installed. Restart to start using it.");
     Ok(())
+}
+
+/// Is there room on the boot partition for the new kernel? Checked before
+/// anything is written, so that an update never stops half way.
+/// systemd-sysupdate keeps 2 versions (InstancesMax=2): before writing the
+/// new one it removes every version but the running one, so their space
+/// counts as free.
+fn check_boot_space(dir: &Path, new: &str, current: &str) -> Result<()> {
+    let need = fs::metadata(dir.join(format!("xeeonos_{new}.efi")))?.len();
+    let esp = boot::esp();
+    let avail = output(
+        "df",
+        &["--output=avail", "--block-size=1", &esp.to_string_lossy()],
+    )?;
+    let mut free: u64 = avail
+        .lines()
+        .nth(1)
+        .and_then(|l| l.trim().parse().ok())
+        .ok_or_else(|| err(format!("cannot read the free space of {}", esp.display())))?;
+    for entry in boot::entries(&esp)? {
+        if entry.version != current
+            && let Ok(meta) = fs::metadata(esp.join("EFI/Linux").join(&entry.file))
+        {
+            free += meta.len();
+        }
+    }
+    if !fits(need, free) {
+        return Err(err(format!(
+            "not enough space on the boot partition ({}) for XeeonOS {new}: it needs {} MB, \
+             {} MB can be made free. Nothing was changed. Please report this problem.",
+            esp.display(),
+            need / MB,
+            free / MB
+        )));
+    }
+    Ok(())
+}
+
+const MB: u64 = 1024 * 1024;
+
+/// The kernel fits, with 16 MB to spare (boot loader files, the file system).
+fn fits(need: u64, free: u64) -> bool {
+    need + 16 * MB <= free
 }
 
 /// Remember (or forget) that a newer version is available, for the message
@@ -442,6 +486,12 @@ mod tests {
         assert!(manifest_files("abc  /etc/passwd\n").is_err());
         assert!(manifest_files("abc  .hidden\n").is_err());
         assert!(manifest_files("abc\n").is_err());
+    }
+
+    #[test]
+    fn boot_space() {
+        assert!(fits(450 * MB, 500 * MB));
+        assert!(!fits(450 * MB, 460 * MB));
     }
 
     #[test]

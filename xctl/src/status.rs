@@ -76,6 +76,9 @@ pub fn run(check: bool) -> Result<()> {
     if let Some(v) = crate::update::available() {
         println!("Update:      XeeonOS {v} is available (sudo xctl update)");
     }
+    for problem in crate::health::problems() {
+        println!("Disk health: PROBLEM: {problem} (see xctl health)");
+    }
     if let Some(last) = crate::snapshots::list()
         .ok()
         .and_then(|l| l.last().cloned())

@@ -1,6 +1,7 @@
 //! `xctl report`: everything needed to understand a problem, in one file to
 //! attach to a bug report: versions, boot entries, disks, network, failed
-//! services and the logs of this boot and of the previous one.
+//! services, disk health, kernel crashes and the logs of this boot and of
+//! the previous one.
 //!
 //! Nothing secret is collected (no passwords, keys or users' files); the
 //! file is readable only by the administrator who asked for it.
@@ -39,6 +40,24 @@ const PARTS: &[(&str, &str, &[&str])] = &[
     ("network.txt", "nmcli", &["device", "status"]),
     ("firewall.txt", "xctl", &["firewall", "status"]),
     ("snapshots.txt", "xctl", &["snapshots"]),
+    ("health.txt", "xctl", &["health"]),
+    (
+        "smart.txt",
+        "sh",
+        &[
+            "-c",
+            "for d in $(lsblk -dno NAME,TYPE | awk '$2 == \"disk\" && $1 !~ /^zram/ {print $1}'); do smartctl --all /dev/$d; done",
+        ],
+    ),
+    // Saved by systemd-pstore from the firmware after a kernel crash.
+    (
+        "crashes.txt",
+        "sh",
+        &[
+            "-c",
+            "find /var/lib/systemd/pstore -type f -exec sh -c 'echo \"== $1\"; cat \"$1\"' _ {} \\; 2>/dev/null; true",
+        ],
+    ),
     ("hardware.txt", "lspci", &["-nn"]),
     (
         "kernel.txt",

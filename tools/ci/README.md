@@ -11,8 +11,9 @@ own with "Re-run failed jobs".
 | `setup.sh` | first-boot setup (unattended), no Arch tools | disk image |
 | `recovery.sh` | Recovery: restart into it, then erase everything | disk image |
 | `network.sh` | network settings: manual address, then DHCP | disk image |
-| `base.sh` | zram swap, firewall (closed, open/close a port), scheduled jobs, fwupd, `xctl report` | disk image |
+| `base.sh` | zram and swap file, systemd-oomd, firewall (closed, open/close a port), scheduled jobs, disk health, pstore, fwupd, `xctl report` | disk image |
 | `snapshots.sh` | take a data snapshot, change files, restore it from Recovery | disk image |
+| `hibernate.sh` | hibernate into the swap file, start again: the session resumes | disk image |
 | `encryption.sh` | disk password on and off (recovery key), then a normal start | disk image |
 | `iso-install.sh` | live ISO boots, installs on a blank disk, installed system boots | live image, system |
 | `iso-alongside.sh` | install next to another system | live image, system |

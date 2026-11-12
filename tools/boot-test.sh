@@ -173,9 +173,9 @@ all_found() {
 for (( waited = 0; waited < timeout; waited += 5 )); do
     if all_found; then
         echo "PASS: all expected output seen after ~${waited}s"
-        # Let the VM finish powering off, so the disk is consistent for the
-        # next boot.
-        for (( i = 0; i < 60; i++ )); do
+        # Let the VM finish powering off (or hibernating), so the disk is
+        # consistent for the next boot.
+        for (( i = 0; i < 180; i++ )); do
             kill -0 "$qemu" 2>/dev/null || break
             sleep 1
         done

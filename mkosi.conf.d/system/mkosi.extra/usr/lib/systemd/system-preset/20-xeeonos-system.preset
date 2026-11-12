@@ -10,6 +10,8 @@ enable xeeonos-swapfile.service
 enable fstrim.timer
 # Firmware metadata (fwupd), so that `fwupdmgr get-updates` knows what is new.
 enable fwupd-refresh.timer
+# Bluetooth (bluez).
+enable bluetooth.service
 # A newer systemd-boot in /usr (signed, see docs/secure-boot.md) is copied to
 # the boot partition at the next start.
 enable systemd-boot-update.service

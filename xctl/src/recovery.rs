@@ -28,6 +28,7 @@ const ACTIONS: &[(&str, &str)] = &[
     ),
     ("rollback", "Go back to the previous version"),
     ("network", "Network settings (Wi-Fi, wired, ...)"),
+    ("encryption", "Disk password (turn on or off)"),
     ("shell", "Shell (needs an administrator's password)"),
     ("erase", "Erase everything and start again from the setup"),
     ("reboot", "Restart"),
@@ -188,6 +189,7 @@ fn perform(action: &str, yes: bool) -> Result<()> {
         }
         "network" => crate::network::screen().map(|_| ()),
         "shell" => shell(),
+        "encryption" => crate::encryption::screen(),
         "erase" => erase(yes),
         "reboot" => reboot(),
         _ => Err(err(format!("unknown action: {action}"))),

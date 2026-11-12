@@ -151,12 +151,14 @@ pub fn run_install(args: &[String]) -> Result<()> {
     let mut yes = false;
     let mut free_space = false;
     let mut separate_boot = false;
+    let mut encrypt = false;
     let mut it = args.iter();
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--disk" => disk_arg = Some(it.next().ok_or_else(|| err("--disk needs a device"))?),
             "--from" => from = Some(it.next().ok_or_else(|| err("--from needs a directory"))?),
             "--yes" => yes = true,
+            "--encrypt" => encrypt = true,
             "--free-space" => free_space = true,
             "--separate-boot" => {
                 free_space = true;
@@ -211,6 +213,17 @@ pub fn run_install(args: &[String]) -> Result<()> {
         },
     };
     let new_boot = check_choice(&disk, space)?;
+    if disk_arg.is_none() {
+        encrypt = ui::yes_no(
+            "Disk password",
+            "The data on the disk is always encrypted. Should a password be asked \
+             every time the computer starts?\n\n- Yes: a stolen disk cannot be read \
+             without the password. You choose it at the first start, and get a \
+             recovery key.\n- No: the computer starts without it.\n\nIt can be \
+             changed at any time (xctl encryption, or Recovery).",
+            false,
+        )?;
+    }
     if !yes && !confirm(&disk, space, new_boot)? {
         return Err(err("stopped; nothing was changed"));
     }
@@ -245,11 +258,17 @@ pub fn run_install(args: &[String]) -> Result<()> {
         )?),
         _ => None,
     };
-    install_boot(
-        esp_dir.path(),
-        boot_dir.as_ref().map(Mounted::path),
-        &payload,
-    )?;
+    let kernels = boot_dir.as_ref().map(Mounted::path);
+    install_boot(esp_dir.path(), kernels, &payload)?;
+    if encrypt {
+        // The first-boot setup asks for the disk password (the data
+        // partition does not exist yet: it is created at the first start).
+        let flag = kernels
+            .unwrap_or(esp_dir.path())
+            .join(crate::setup::ENCRYPT_FLAG);
+        fs::create_dir_all(flag.parent().unwrap_or(Path::new("/")))?;
+        fs::write(&flag, "")?;
+    }
     drop(boot_dir);
     drop(esp_dir);
 

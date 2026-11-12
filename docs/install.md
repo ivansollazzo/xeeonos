@@ -32,6 +32,11 @@ The installer is a set of black and white dialog windows (whiptail, like
    where the kernels go (the existing EFI System Partition, or a separate
    boot partition).
 
+Then it asks whether a **disk password** should be asked at every start
+(the data is always encrypted; see [encryption.md](encryption.md)). If yes,
+the first-boot setup asks for it. `--encrypt` gives the same answer without
+the windows.
+
 XeeonOS is not installed next to a system that already uses partitions of
 the types XeeonOS uses for itself (root, `/usr`, XBOOTLDR, as on systemd's
 Discoverable Partitions): XeeonOS would take them for its own at its first

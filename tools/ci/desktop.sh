@@ -15,6 +15,9 @@ wait_for() { # <user> <process>: up to 3 minutes
         sleep 1
     done
 }
+# The test command replaces the normal boot target (systemd.run=): start the
+# graphical one, as a normal boot does.
+systemctl start --no-block graphical.target
 wait_for sddm kwin_wayland
 pgrep -u sddm -l -x kwin_wayland | sed s,^,GREETER-,
 systemctl is-active display-manager.service | sed s,^,SDDM-,
@@ -26,7 +29,7 @@ systemctl restart display-manager.service
 wait_for test plasmashell
 pgrep -u test -l -x plasmashell | sed s,^,DESKTOP-,
 sleep 10
-test -S "/run/user/$(id -u test)/pipewire-0" && echo SOUND-ready
+if test -S "/run/user/$(id -u test)/pipewire-0"; then echo SOUND-ready; fi
 SCRIPT
 TIMEOUT=900 tools/boot-test.sh \
     --setup out/setup.txt \

@@ -21,7 +21,7 @@ xctl firewall deny 2222/tcp; nft list chain inet xeeonos input | grep -q 2222 ||
 xctl firewall status; \
 for t in xeeonos-update-check.timer xeeonos-scrub.timer xeeonos-health.timer fstrim.timer fwupd-refresh.timer; do echo TIMER-\$t-\$(systemctl is-enabled \$t); done; \
 xctl update --check; \
-fwupdmgr --version >/dev/null && echo HAS-FWUPD; \
+systemctl cat fwupd.service >/dev/null && command -v fwupdmgr >/dev/null && echo HAS-FWUPD; \
 xctl report && tar --zstd -tf /var/tmp/xeeonos-report-*.tar.zst | grep -c .txt | sed s,^,REPORT-FILES-,'" \
     --expect "SWAP-/dev/zram0 +partition +100" \
     --expect "SWAP-/swap/swapfile +file +10" \

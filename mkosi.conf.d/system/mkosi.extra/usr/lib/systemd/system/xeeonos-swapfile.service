@@ -7,7 +7,10 @@ Description=Swap file
 Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/maintenance.md
 DefaultDependencies=no
 ConditionPathIsMountPoint=/
-After=local-fs.target
+# Only the root file system is needed. Not After=local-fs.target: that
+# waits for tmp.mount, which itself waits for swap.target (an ordering cycle,
+# which systemd breaks by skipping one of the units).
+RequiresMountsFor=/swap
 Before=swap.target shutdown.target
 Conflicts=shutdown.target
 

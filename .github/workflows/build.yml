@@ -1,10 +1,11 @@
 name: Build
 
-# Channel branches: `experimental` now, later `<N>.x/alpha|beta|stable`.
+# Channel branches: `experimental` now, later `<major>.<minor>-alpha|beta|stable`
+# (e.g. 1.0-stable, 1.1-beta: the branch name is the channel, see tools/version.sh).
 # Pull requests build and test, but never publish anything.
 on:
   push:
-    branches: [experimental, '*.x/alpha', '*.x/beta', '*.x/stable']
+    branches: [experimental, '[0-9]*.[0-9]*-alpha', '[0-9]*.[0-9]*-beta', '[0-9]*.[0-9]*-stable']
   pull_request:
   workflow_dispatch:
 

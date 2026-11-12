@@ -4,12 +4,19 @@
 set -euo pipefail
 
 version=${IMAGE_VERSION:?}
+# The code name of this minor version, if it has one (file codenames).
+minor=$(echo "${version%%-*}" | cut -d. -f1,2)
+codename=$(awk -v m="$minor" '!/^#/ && $1 == m { print $2 }' "$SRCDIR/codenames")
+pretty="XeeonOS $version${codename:+ ($codename)}"
 cat >>"$BUILDROOT/usr/lib/os-release" <<EOS
 VERSION="$version"
 VERSION_ID="${version%%-*}"
-PRETTY_NAME="XeeonOS $version"
+PRETTY_NAME="$pretty"
 BUILD_ID="$(date -u +%Y%m%d)"
 EOS
+[ -z "$codename" ] || echo "VERSION_CODENAME=$codename" >>"$BUILDROOT/usr/lib/os-release"
+# The list itself, for `xctl channel <code name>`.
+install -D -m 644 "$SRCDIR/codenames" "$BUILDROOT/usr/share/xeeonos/codenames"
 
 # The Arch Linux snapshot the packages come from (shown by `xctl status`).
 snapshot=$(sed -n 's/^Snapshot=//p' "$SRCDIR/mkosi.conf")

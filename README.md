@@ -16,7 +16,7 @@ The channel is the branch name:
 | Branch | Channel | Version example |
 | --- | --- | --- |
 | `experimental` | Free experimentation, continuous builds | `0.1.0-experimental.42` |
-| `<N>.x/alpha`, `<N>.x/beta`, `<N>.x/stable` (later) | Releases of major version N | `1.0.0-beta.57`, `1.0.0` |
+| `<major>.<minor>-alpha`, `-beta`, `-stable` (later), e.g. `1.0-stable`, `1.1-beta` | Releases, one set of branches per minor version | `1.1.0-beta.57`, `1.0.0` |
 
 Changes enter a branch only through a pull request with green CI; work branches
 are deleted after merge. CI builds everything once, then runs one test job per

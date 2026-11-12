@@ -47,7 +47,11 @@ pub fn run(check: bool) -> Result<()> {
     let root_fs =
         output_opt("findmnt", &["--noheadings", "--output", "FSTYPE", "/"]).unwrap_or_default();
 
-    println!("XeeonOS {version} (build {build})");
+    // The code name of this minor version, if it has one (e.g. "maverick").
+    match os.get("VERSION_CODENAME") {
+        Some(name) if !name.is_empty() => println!("XeeonOS {version} {name} (build {build})"),
+        _ => println!("XeeonOS {version} (build {build})"),
+    }
     if let Some(snapshot) = os.get("XEEONOS_ARCH_SNAPSHOT") {
         println!("Based on:    Arch Linux (snapshot {snapshot})");
     }

@@ -9,7 +9,10 @@ use std::path::Path;
 
 use crate::config;
 use crate::util::{Result, err, need_root};
-use crate::version::{channel_of, is_valid_channel, read_os_release};
+use crate::version::{channel_of, channel_of_codename, is_valid_channel, read_os_release};
+
+/// The code names of the minor versions (see the file `codenames`).
+const CODENAMES: &str = "/usr/share/xeeonos/codenames";
 
 /// The channel this system follows, if any (development builds have none).
 pub fn current() -> Result<Option<String>> {
@@ -41,16 +44,23 @@ pub fn run(args: &[String]) -> Result<()> {
                 current()?.as_deref().unwrap_or("none (development build)")
             );
         }
-        Some(name) if is_valid_channel(name) => {
+        Some(name) => {
+            // A code name stands for the stable channel of its version.
+            let channel = if is_valid_channel(name) {
+                name.to_string()
+            } else {
+                let list = fs::read_to_string(CODENAMES).unwrap_or_default();
+                channel_of_codename(&list, name).ok_or_else(|| {
+                    err(format!(
+                        "unknown channel '{name}' (expected experimental, a channel like \
+                         1.0-stable, 1.0-beta, 1.1-alpha, or the code name of a version)"
+                    ))
+                })?
+            };
             need_root("channel")?;
             fs::create_dir_all(Path::new(config::CHANNEL_FILE).parent().unwrap())?;
-            fs::write(config::CHANNEL_FILE, format!("{name}\n"))?;
-            println!("Channel: {name} (takes effect at the next xctl update)");
-        }
-        Some(name) => {
-            return Err(err(format!(
-                "unknown channel '{name}' (expected experimental or <N>.x-alpha, <N>.x-beta, <N>.x-stable)"
-            )));
+            fs::write(config::CHANNEL_FILE, format!("{channel}\n"))?;
+            println!("Channel: {channel} (takes effect at the next xctl update)");
         }
     }
     Ok(())

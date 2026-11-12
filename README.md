@@ -19,7 +19,8 @@ The channel is the branch name:
 | `<N>.x/alpha`, `<N>.x/beta`, `<N>.x/stable` (later) | Releases of major version N | `1.0.0-beta.57`, `1.0.0` |
 
 Changes enter a branch only through a pull request with green CI; work branches
-are deleted after merge. The base version lives in `mkosi.version`;
+are deleted after merge. CI builds everything once, then runs one test job per
+feature in parallel ([tools/ci/](tools/ci/README.md)). The base version lives in `mkosi.version`;
 `tools/version.sh` adds the channel and the CI run number.
 
 ## Modules

@@ -1,6 +1,7 @@
 # mkosi
 mkosi.output/
 mkosi.cache/
+mkosi.pkgcache/
 mkosi.tools/
 mkosi.workspace/
 # build artifacts

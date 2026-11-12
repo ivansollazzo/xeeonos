@@ -59,7 +59,7 @@ not safe. If no version starts at all, use the installation medium
 
 ## Tests
 
-CI starts from the system set up by the first-boot test: `xctl recovery
---yes` restarts into Recovery, `xctl recovery erase --yes` asks for the
+CI (`tools/ci/recovery.sh`) starts from a fresh disk and creates a user with
+the first-boot setup; then `xctl recovery --yes` restarts into Recovery, `xctl recovery erase --yes` asks for the
 reset, and after the next restart the user is gone and the system is still
 sealed.

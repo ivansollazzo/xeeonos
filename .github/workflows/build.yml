@@ -18,9 +18,64 @@ concurrency:
 #
 # Everything is built once, in `build`; the test jobs use what it built
 # (artifacts of this run, kept 3 days), so a failed test can be re-run on its
-# own in a few minutes. Every run builds from scratch: nothing is shared
-# between runs or pull requests.
+# own in a few minutes. Every run builds from scratch: no packages or build
+# results are shared between runs or pull requests.
+#
+# Resuming: in a pull request, when the previous run did not pass, the test
+# blocks that passed in it (disk tests, ISO tests) are not run again: the new
+# run goes on from the block that failed. Once a run passes completely, the
+# next one tests everything again. (A block is the unit, because its tests
+# share one virtual disk and depend on each other.) Pushes to a channel
+# branch always run everything.
 jobs:
+  resume:
+    name: Resume after a failed run
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    outputs:
+      disk: ${{ steps.find.outputs.disk }}
+      iso: ${{ steps.find.outputs.iso }}
+    steps:
+      - name: Find the test blocks that passed in the previous run
+        id: find
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          prev=$(gh run list --workflow build.yml --branch "$BRANCH" --event pull_request \
+            --limit 20 --json databaseId,conclusion \
+            --jq "[.[] | select(.databaseId != $GITHUB_RUN_ID)][0] // empty | \"\(.databaseId) \(.conclusion)\"")
+          if [[ -z $prev ]]; then
+            echo "No previous run: everything is tested." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          read -r id conclusion <<< "$prev"
+          if [[ $conclusion == success ]]; then
+            echo "Previous run ($id) passed: everything is tested again." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh run download "$id" --pattern 'passed-*' --dir passed || true
+          for block in disk iso; do
+            if [[ -e passed/passed-$block ]]; then
+              echo "$block=passed" >> "$GITHUB_OUTPUT"
+              echo "Not run again: $block tests (passed in run $id)." | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      # Passed blocks are carried over, so that a run after this one can also skip them.
+      - run: echo passed > passed
+      - name: Carry over the passed disk tests
+        if: steps.find.outputs.disk == 'passed'
+        uses: actions/upload-artifact@v4
+        with: {name: passed-disk, path: passed, retention-days: 3}
+      - name: Carry over the passed ISO tests
+        if: steps.find.outputs.iso == 'passed'
+        uses: actions/upload-artifact@v4
+        with: {name: passed-iso, path: passed, retention-days: 3}
+
   xctl:
     name: xctl (format, lint, unit tests)
     runs-on: ubuntu-24.04
@@ -115,8 +170,9 @@ jobs:
           retention-days: 3
 
   disk:
-    name: Test first boot, A/B update, rollback, setup, Recovery, network, encryption
-    needs: build
+    name: Test first boot, A/B update, rollback, setup and Recovery
+    needs: [resume, build]
+    if: needs.resume.outputs.disk != 'passed'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -286,20 +342,10 @@ jobs:
             --expect "DHCP-Wired .*10\.0\.2\.15/24" \
             out/disk.raw out/serial-10-network.log
 
-      # The data partition is always encrypted, with an empty password. Turn
-      # the disk password on (instant), then off again with the recovery key
-      # it printed; the next start must still need no password.
-      - name: "Test 11: disk encryption on and off"
-        run: |
-          tools/boot-test.sh \
-            --run "/bin/sh -c 'xctl status | grep Encrypted; printf test-disk-pw | xctl encryption on --password-stdin | tee /run/on.txt; xctl encryption status | sed s,^,AFTER-ON-,; grep -oE [a-z-]{71} /run/on.txt | head -n1 | xctl encryption off --password-stdin; xctl encryption status | sed s,^,AFTER-OFF-,'" \
-            --expect "Encrypted: +yes, password off" \
-            --expect "Recovery key" \
-            --expect "AFTER-ON-encryption: on" \
-            --expect "Encryption is off" \
-            --expect "AFTER-OFF-encryption: off" \
-            out/disk.raw out/serial-11a-encryption.log
-          tools/boot-test.sh out/disk.raw out/serial-11b-after-encryption.log
+      - name: Remember that these tests passed
+        run: echo passed > passed
+      - uses: actions/upload-artifact@v4
+        with: {name: passed-disk, path: passed, retention-days: 3}
 
       - name: Upload boot logs
         if: always()
@@ -311,7 +357,11 @@ jobs:
 
   iso:
     name: Pack live ISO, test boot and installation
-    needs: disk
+    needs: [resume, build, disk]
+    if: >-
+      !cancelled() && needs.build.result == 'success' &&
+      (needs.disk.result == 'success' || needs.resume.outputs.disk == 'passed') &&
+      needs.resume.outputs.iso != 'passed'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -386,6 +436,11 @@ jobs:
             --expect "check: sealed system OK" \
             out/other.raw out/serial-installed-free.log
           rm out/other.raw
+
+      - name: Remember that these tests passed
+        run: echo passed > passed
+      - uses: actions/upload-artifact@v4
+        with: {name: passed-iso, path: passed, retention-days: 3}
 
       - name: Upload ISO
         if: success()

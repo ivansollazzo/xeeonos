@@ -137,7 +137,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {test: update, artifacts: '{disk-image,update-next}'}
+          - {test: update, artifacts: '{disk-image,update-next,update-system}'}
           - {test: setup, artifacts: disk-image}
           - {test: recovery, artifacts: disk-image}
           - {test: network, artifacts: disk-image}

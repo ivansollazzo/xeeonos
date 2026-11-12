@@ -94,16 +94,18 @@ tools/boot-test.sh \
     out/disk.raw out/serial-5c-after-reinstall.log
 echo "::endgroup::"
 
-# The next version under a newer number, with the start of its /usr
+# The first version under a newer number, with the start of its /usr
 # overwritten: it installs fine (the files match the signed manifest) but
-# cannot start, because dm-verity refuses the damaged blocks.
+# cannot start, because dm-verity refuses the damaged blocks. (Not the
+# running version: its kernel would find that version's intact /usr in the
+# other slot, by its verity hash, and start from it.)
 echo "::group::6. Install a broken version"
 src=out/broken-src
 mkdir -p "$src"
-cp "build/update-next/xeeonos_$NEXT.efi" "$src/xeeonos_$BROKEN.efi"
-for f in build/update-next/xeeonos_"$NEXT".usr-*.raw.zst; do
+cp "build/update-system/xeeonos_$VERSION.efi" "$src/xeeonos_$BROKEN.efi"
+for f in build/update-system/xeeonos_"$VERSION".usr-*.raw.zst; do
     name=$(basename "$f" .zst)
-    zstd -d --sparse --quiet "$f" -o "$src/xeeonos_$BROKEN${name#xeeonos_$NEXT}"
+    zstd -d --sparse --quiet "$f" -o "$src/xeeonos_$BROKEN${name#xeeonos_$VERSION}"
 done
 dd if=/dev/urandom of="$(echo "$src"/xeeonos_"$BROKEN".usr-x86-64.*.raw)" bs=1M count=1 conv=notrunc
 SIGNING_KEY="XeeonOS CI test key" tools/mkupdate.sh "$src" "$BROKEN" out/update-broken

@@ -361,7 +361,7 @@ jobs:
           rm out/esp.img
           tools/boot-test.sh \
             --disk out/other.raw \
-            --run "/bin/sh -c '/usr/bin/xctl install-system --disk /dev/vda --free-space --yes || journalctl -b --no-pager -o cat | grep -i -e repart -e mkfs | tail -n 40; lsblk -o NAME,SIZE,PARTTYPENAME,LABEL /dev/vda'" \
+            --run "/bin/sh -c '/usr/bin/xctl install-system --disk /dev/vda --free-space --yes || { echo DIAG; systemd-repart --version; sfdisk -d /dev/vda; SYSTEMD_LOG_LEVEL=debug /usr/bin/xctl install-system --disk /dev/vda --free-space --yes; }; lsblk -o NAME,SIZE,PARTTYPENAME,LABEL /dev/vda'" \
             --expect "XeeonOS $VERSION is installed on /dev/vda" \
             "out/xeeonos-$VERSION.iso" out/serial-install-free.log
           tools/boot-test.sh \

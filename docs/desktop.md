@@ -9,8 +9,8 @@ The published XeeonOS images have the KDE Plasma desktop (module
   first user;
 - settings for **network** (NetworkManager), **sound**, **Bluetooth**,
   **screens** and **power** (power profiles), all in System Settings. Sound
-  (PipeWire) and Bluetooth themselves are part of the core system, the same
-  for every desktop;
+  (PipeWire) and Bluetooth themselves are part of the core system (module
+  `extra`), the same for every desktop;
 - the applications that must be part of the system: **Konsole** (terminal),
   **Dolphin** (files), **Spectacle** (screenshots), **System Monitor**
   (processes and resources) and **Ark** (archives). More applications will

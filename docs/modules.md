@@ -19,7 +19,8 @@ snapshot, output, tools tree) stay in the top-level `mkosi.conf`.
 | Module | Kind | Purpose |
 | --- | --- | --- |
 | `base` | core | Kernel, firmware, systemd, NetworkManager, all languages, XeeonOS identity and version; removes pacman and build-only files |
-| `system` | core | Sealed disk: ESP, A/B `/usr` slots (erofs + dm-verity), Btrfs data partition, hermetic `/etc`, sound (PipeWire) and Bluetooth, sysupdate definitions, boot health check, first-boot setup, Recovery boot entry |
+| `system` | core | Sealed disk: ESP, A/B `/usr` slots (erofs + dm-verity), Btrfs data partition, hermetic `/etc`, sysupdate definitions, boot health check, first-boot setup, Recovery boot entry |
+| `extra` | core | Services every installed system has, whatever the desktop: sound (PipeWire) and Bluetooth; not in the live ISO |
 | `xctl` | core | The `xctl` system tool (Rust, source in `xctl/`): status, update, rollback, channel, packages, setup, install-system |
 | `live` | optional | Live ISO: UKI running from RAM, root autologin, installer tools; replaces `system` |
 | `plasma` | optional | KDE Plasma desktop, minimal: Wayland session, SDDM login screen, network/sound/Bluetooth/power settings, Konsole, Dolphin, Spectacle, System Monitor, Ark (see [desktop.md](desktop.md)) |

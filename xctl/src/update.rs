@@ -114,6 +114,9 @@ pub fn run(args: &[String]) -> Result<()> {
         Path::new(config::CACHE)
     };
     let _ = fs::remove_dir_all(cache);
+    if !check {
+        make_cache_subvolume(cache);
+    }
     fs::create_dir_all(cache)?;
     let _cleanup = Cleanup(cache);
 
@@ -178,6 +181,22 @@ pub fn run(args: &[String]) -> Result<()> {
     run_program(config::SYSUPDATE, &["update", &new])?;
     println!("XeeonOS {new} is installed. Restart to start using it.");
     Ok(())
+}
+
+/// The download directory as a Btrfs subvolume of its own, so that the
+/// snapshot of the data taken before installing (xctl snapshots) does not
+/// keep a copy of the downloaded update (about 2 GB each). Where that is not
+/// possible (not Btrfs), the caller creates a plain directory.
+fn make_cache_subvolume(cache: &Path) {
+    if let Some(parent) = cache.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = Command::new("btrfs")
+        .args(["--quiet", "subvolume", "create"])
+        .arg(cache)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
 }
 
 /// Does update.conf ask the daily check to offer turned-off versions too?

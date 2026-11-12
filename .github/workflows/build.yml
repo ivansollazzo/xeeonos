@@ -257,7 +257,7 @@ jobs:
         run: |
           tools/boot-test.sh --efivars out/vars-9.fd \
             --run "/bin/sh -c 'grep -qw xeeonos[.]recovery /proc/cmdline && echo WRONG-BOOT; xctl recovery --yes'" \
-            --expect "Restarting into Recovery \(xeeonos_${VERSION}\.efi@1\)" \
+            --expect "Restarting into Recovery \(xeeonos_${VERSION}\.efi@recovery\)" \
             out/disk.raw out/serial-9a-to-recovery.log
           tools/boot-test.sh --efivars out/vars-9.fd \
             --run "/bin/sh -c 'grep -qw xeeonos[.]recovery /proc/cmdline && echo IN-RECOVERY; systemctl is-active xeeonos-recovery.target | sed s,^,TARGET-,; command -v nmtui && echo HAS-NMTUI; xctl recovery erase --yes'" \

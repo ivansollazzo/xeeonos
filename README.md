@@ -86,12 +86,14 @@ workflow run as the `xeeonos-iso` artifact.
 
 The live system runs entirely from RAM (allow at least 4 GB) and logs in as
 `root` on the console. It does not touch your disks unless you install:
-`xctl install-system` installs XeeonOS on a whole disk, erasing it. See
+`xctl install-system` installs XeeonOS on a whole disk, or next to another
+system in its free space, or manually. See
 [docs/install.md](docs/install.md).
 
 ## First boot and Recovery
 
-At the first boot `xctl setup` asks for the language, keyboard, time zone,
+At the first boot `xctl setup` asks, in black and white dialog windows, for
+the language, keyboard and time zone (applied at once), the network, the
 computer name and the first user ([docs/setup.md](docs/setup.md)). The boot
 menu has a **Recovery** entry (also `sudo xctl recovery`) with a menu to
 reinstall, go back to the previous version, set up the network, open an

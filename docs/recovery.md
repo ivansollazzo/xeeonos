@@ -2,7 +2,7 @@
 
 Every version in the boot menu has a second entry, **Recovery**. It starts
 the same version, but instead of the normal system it shows the Recovery
-menu on the screen:
+menu on the screen, in black and white dialog windows:
 
 1. **Reinstall XeeonOS**: downloads the newest version of your channel and
    installs it next to the running one. Users, files and settings stay.
@@ -10,8 +10,10 @@ menu on the screen:
    (dm-verity), so they cannot be damaged: reinstalling means moving to the
    newest version.
 2. **Go back to the previous version**: the same as `xctl rollback`.
-3. **Network settings**: `nmtui`, to choose a Wi-Fi network or change the
-   network configuration. Saved networks already work in Recovery.
+3. **Network settings**: the same window as in the first-boot setup
+   (`xctl network`): choose a Wi-Fi network, or set a wired or Wi-Fi
+   connection to automatic (DHCP) or to a manual address; "Advanced" opens
+   `nmtui`. Saved networks already work in Recovery.
 4. **Shell**: asks for the name and password of an administrator (a user of
    the `wheel` group), then opens a shell as that user; `sudo -i` gives root
    rights.

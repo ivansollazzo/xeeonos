@@ -11,12 +11,12 @@
 //! The menu can also be driven without a keyboard, one action at a time:
 //! `xctl recovery <action> [--yes]` (used by the tests).
 
-use std::io::{self, BufRead, Write};
 use std::process::Command;
 
 use serde_json::Value;
 
 use crate::boot;
+use crate::ui;
 use crate::update;
 use crate::util::{Result, err, need_root, output, run};
 
@@ -67,12 +67,22 @@ pub fn run_recovery(args: &[String]) -> Result<()> {
 
 /// On the running system: offer to start Recovery at the next boot only.
 fn restart_into_recovery(yes: bool) -> Result<()> {
-    if !yes {
-        let answer = ask("Restart into Recovery now? [y/N] ")?;
-        if !matches!(answer.as_str(), "y" | "Y" | "yes") {
-            println!("Nothing changed.");
-            return Ok(());
-        }
+    if !yes && !ui::interactive() {
+        return Err(err(
+            "no terminal to ask \"Restart into Recovery now?\" on (give --yes)",
+        ));
+    }
+    if !yes
+        && !ui::yes_no(
+            "Recovery",
+            "Restart into Recovery now?\n\nRecovery can reinstall XeeonOS, go back to the \
+             previous version, change the network settings, open a shell or erase \
+             everything.",
+            true,
+        )?
+    {
+        println!("Nothing changed.");
+        return Ok(());
     }
     let list = output("bootctl", &["list", "--json=short"])?;
     let id = recovery_entry(&list, &loader_entries())?;
@@ -148,28 +158,24 @@ fn parse_loader_entries(data: &[u8]) -> Vec<String> {
 
 /// The interactive menu, shown on the console in Recovery.
 fn menu() -> Result<()> {
+    let items: Vec<(String, String)> = ACTIONS
+        .iter()
+        .map(|(name, text)| (name.to_string(), text.to_string()))
+        .collect();
+    let mut last: Option<String> = None;
     loop {
-        println!();
-        println!("XeeonOS Recovery");
-        println!();
-        for (i, (_, text)) in ACTIONS.iter().enumerate() {
-            println!("  {}. {text}", i + 1);
+        let chosen = ui::menu(
+            "Recovery",
+            "What do you want to do?",
+            &items,
+            last.as_deref(),
+        )?;
+        // "Back" has nowhere to go: the menu is the whole of Recovery.
+        let Some(name) = chosen else { continue };
+        if let Err(e) = perform(&name, false) {
+            ui::message("Recovery", &format!("It did not work:\n\n{e}"))?;
         }
-        println!();
-        let answer = ask("Choose (1-6): ")?;
-        let chosen = answer
-            .parse::<usize>()
-            .ok()
-            .and_then(|n| n.checked_sub(1))
-            .and_then(|n| ACTIONS.get(n));
-        match chosen {
-            Some((name, _)) => {
-                if let Err(e) = perform(name, false) {
-                    println!("xctl: {e}");
-                }
-            }
-            None => println!("Please type a number from 1 to {}.", ACTIONS.len()),
-        }
+        last = Some(name);
     }
 }
 
@@ -180,7 +186,7 @@ fn perform(action: &str, yes: bool) -> Result<()> {
             boot::rollback(&[])?;
             offer_reboot(yes)
         }
-        "network" => run("nmtui", &[]),
+        "network" => crate::network::screen().map(|_| ()),
         "shell" => shell(),
         "erase" => erase(yes),
         "reboot" => reboot(),
@@ -192,8 +198,17 @@ fn perform(action: &str, yes: bool) -> Result<()> {
 /// (dm-verity), so a version that starts is known to be intact: reinstalling
 /// means installing the newest one, next to the running one.
 fn reinstall(yes: bool) -> Result<()> {
-    println!("The system files of this version are sealed and intact.");
-    println!("Looking for the newest version of XeeonOS (needs the network)...");
+    if !yes
+        && !ui::yes_no(
+            "Reinstall XeeonOS",
+            "The system files of this version are sealed and intact.\n\nDownload the \
+             newest version of XeeonOS and install it? Users, files and settings stay. \
+             This needs the network.",
+            false,
+        )?
+    {
+        return Ok(());
+    }
     update::run(&[])?;
     offer_reboot(yes)
 }
@@ -202,11 +217,19 @@ fn reinstall(yes: bool) -> Result<()> {
 /// `wheel` group is asked by `su` itself, run without root rights so that it
 /// cannot skip the password.
 fn shell() -> Result<()> {
-    let user = ask("Administrator name: ")?;
+    let Some(user) = ui::input(
+        "Shell",
+        "The name of an administrator (you will be asked for the password):",
+        "",
+    )?
+    else {
+        return Ok(());
+    };
     let groups = output("id", &["-nG", &user]).map_err(|_| err(format!("no user '{user}'")))?;
     if !groups.split_whitespace().any(|g| g == "wheel") {
         return Err(err(format!("{user} is not an administrator")));
     }
+    let _ = Command::new("clear").status();
     println!("Type `sudo -i` for root rights, `exit` to go back to the menu.");
     run(
         "setpriv",
@@ -225,15 +248,25 @@ fn shell() -> Result<()> {
 /// request is an EFI variable read by systemd at boot; /usr is not touched.
 fn erase(yes: bool) -> Result<()> {
     if !yes {
-        println!("This erases all users, settings and files on this computer.");
-        let answer = ask(&format!("Type {ERASE_WORD} to confirm: "))?;
-        if answer != ERASE_WORD {
-            println!("Nothing changed.");
+        let answer = ui::input(
+            "Erase everything",
+            &format!(
+                "This erases all users, settings and files on this computer. The \
+                 computer then starts again with the first-boot setup.\n\nType \
+                 {ERASE_WORD} to confirm:"
+            ),
+            "",
+        )?;
+        if answer.as_deref() != Some(ERASE_WORD) {
+            ui::message("Erase everything", "Nothing changed.")?;
             return Ok(());
         }
     }
     run("/usr/lib/systemd/systemd-factory-reset", &["request"])?;
-    println!("All data will be erased at the restart.");
+    ui::working(
+        "Erase everything",
+        "All data will be erased at the restart.",
+    );
     reboot()
 }
 
@@ -241,8 +274,11 @@ fn offer_reboot(yes: bool) -> Result<()> {
     if yes {
         return Ok(());
     }
-    let answer = ask("Restart now? [Y/n] ")?;
-    if matches!(answer.as_str(), "" | "y" | "Y" | "yes") {
+    if ui::yes_no(
+        "Restart",
+        "Done. Restart now to start the new version?",
+        false,
+    )? {
         reboot()
     } else {
         Ok(())
@@ -253,16 +289,6 @@ fn reboot() -> Result<()> {
     // `Command::status` waits; systemd stops this program while restarting.
     let _ = Command::new("systemctl").arg("reboot").status();
     Ok(())
-}
-
-fn ask(question: &str) -> Result<String> {
-    print!("{question}");
-    io::stdout().flush()?;
-    let mut line = String::new();
-    if io::stdin().lock().read_line(&mut line)? == 0 {
-        return Err(err("no answer (end of input)"));
-    }
-    Ok(line.trim().to_string())
 }
 
 #[cfg(test)]

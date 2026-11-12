@@ -1,5 +1,8 @@
 //! `xctl status`: what is running, and is the system sealed?
 
+use std::fs;
+use std::path::Path;
+
 use crate::boot;
 use crate::channel;
 use crate::config;
@@ -28,10 +31,17 @@ pub fn run(check: bool) -> Result<()> {
 
     let mut usr_verity = false;
     let mut running_slot = None;
-    if let Some(dm_name) = usr_source.strip_prefix("/dev/mapper/") {
-        let table = output_opt("dmsetup", &["table", dm_name]).unwrap_or_default();
-        usr_verity = table.split_whitespace().any(|w| w == "verity");
-        running_slot = usr_data_partition(dm_name);
+    // Read the device-mapper details from /sys, which (unlike `dmsetup`)
+    // works without root: /dev/mapper/usr -> /dev/dm-N -> /sys/block/dm-N.
+    if usr_source.starts_with("/dev/mapper/")
+        && let Ok(dev) = fs::canonicalize(&usr_source)
+        && let Some(dm) = dev.file_name().and_then(|n| n.to_str())
+    {
+        let sys = Path::new("/sys/block").join(dm);
+        // cryptsetup names verity devices "CRYPT-VERITY-...".
+        usr_verity = fs::read_to_string(sys.join("dm/uuid"))
+            .is_ok_and(|uuid| uuid.starts_with("CRYPT-VERITY-"));
+        running_slot = usr_data_partition(&sys);
     }
 
     let root_fs =
@@ -129,26 +139,26 @@ fn yes_no(b: bool) -> &'static str {
 
 /// The verity device sits on two partitions (data and hash tree); return the
 /// data one, i.e. the partition whose GPT type is /usr.
-fn usr_data_partition(dm_name: &str) -> Option<String> {
-    let deps = output_opt("dmsetup", &["deps", "-o", "devname", dm_name])?;
-    // Output looks like: "2 dependencies  : (vda2) (vda3)"
-    deps.split(['(', ')'])
-        .skip(1)
-        .step_by(2)
-        .find(|dev| {
-            output_opt(
-                "lsblk",
-                &[
-                    "--noheadings",
-                    "--nodeps",
-                    "--output",
-                    "PARTTYPE",
-                    &format!("/dev/{dev}"),
-                ],
-            )
-            .is_some_and(|t| t.eq_ignore_ascii_case(config::USR_PARTITION_TYPE))
-        })
-        .map(str::to_string)
+fn usr_data_partition(sys: &Path) -> Option<String> {
+    // /sys/block/dm-N/slaves/ lists the partitions under the device.
+    let mut devs: Vec<String> = fs::read_dir(sys.join("slaves"))
+        .ok()?
+        .filter_map(|e| e.ok()?.file_name().into_string().ok())
+        .collect();
+    devs.sort();
+    devs.into_iter().find(|dev| {
+        output_opt(
+            "lsblk",
+            &[
+                "--noheadings",
+                "--nodeps",
+                "--output",
+                "PARTTYPE",
+                &format!("/dev/{dev}"),
+            ],
+        )
+        .is_some_and(|t| t.eq_ignore_ascii_case(config::USR_PARTITION_TYPE))
+    })
 }
 
 /// All /usr partitions on a disk, in disk order.

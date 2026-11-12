@@ -1,16 +1,18 @@
 //! xctl - the XeeonOS system tool.
 //!
 //! Commands: `status`, `update`, `rollback`, `channel`, `packages`, `setup`,
-//! `install-system`. Each command lives in its own module (file) below.
+//! `install-system`, `recovery`, `network`. Each command lives in its own module (file) below.
 
 mod boot;
 mod channel;
 mod install;
+mod network;
 mod oci;
 mod packages;
 mod recovery;
 mod setup;
 mod status;
+mod ui;
 mod update;
 mod util;
 mod version;
@@ -64,12 +66,23 @@ Commands:
                          first boot).
   install-system [options]
                          Install XeeonOS onto a disk, from the live ISO or
-                         from Recovery.
-                         The whole disk is erased (you are asked to confirm).
-      --disk <device>    The disk, e.g. /dev/sda (asked if not given).
+                         from Recovery: on a whole disk (erased), or next
+                         to another system in its free space (asked in
+                         dialog windows if --disk is not given).
+      --disk <device>    The disk, e.g. /dev/sda.
+      --free-space       Use the free space of the disk; keep the other
+                         partitions.
+      --separate-boot    With --free-space: put the kernels in a new boot
+                         partition, even if the EFI partition has room.
       --from <dir>       Install the version in <dir> instead of the one
                          on the installation medium.
       --yes              Do not ask for confirmation (for automated tests).
+  network [<what>]       Network settings: without <what>, a screen to
+                         choose a Wi-Fi network or set up a wired one.
+      status             Show the network devices and their addresses.
+      ethernet [--device <dev>] (--dhcp | --address <ip>/<prefix>
+               --gateway <ip> [--dns <ip>,...])
+      wifi <name> [--password <p>] [--dhcp | --address ... ]
   recovery               Restart into Recovery (asks first). In Recovery,
                          show the Recovery menu: reinstall, previous version,
                          network, shell, erase everything, restart.
@@ -92,6 +105,7 @@ fn main() {
         "recovery" => recovery::run_recovery(rest),
         "setup" => setup::run_setup(rest),
         "channel" => channel::run(rest),
+        "network" => network::run_network(rest),
         "help" | "-h" | "--help" => {
             println!("{USAGE}");
             Ok(())

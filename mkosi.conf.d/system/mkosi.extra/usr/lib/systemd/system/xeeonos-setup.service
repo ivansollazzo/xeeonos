@@ -1,6 +1,7 @@
 # First-boot setup: language, keyboard, time zone, computer name and the
 # first user (`xctl setup`). It runs before the login prompt, at the first
-# boot and again after a factory reset (until it has completed once).
+# boot and again after a factory reset (until it has completed once). It
+# starts after NetworkManager, so that the network can be set up too.
 #
 # Unattended setup: pass the answers as the system credential xeeonos.setup
 # (see docs/setup.md). Booting with systemd.firstboot=no skips it (tests).
@@ -9,16 +10,18 @@ Description=XeeonOS first-boot setup
 Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/setup.md
 ConditionPathExists=!/var/lib/xeeonos/setup-done
 ConditionKernelCommandLine=!systemd.firstboot=no
-DefaultDependencies=no
-After=local-fs.target systemd-remount-fs.service systemd-tmpfiles-setup.service systemd-sysusers.service
-Before=sysinit.target systemd-user-sessions.service getty-pre.target first-boot-complete.target shutdown.target
-Wants=first-boot-complete.target
-Conflicts=shutdown.target
+Wants=NetworkManager.service first-boot-complete.target
+After=NetworkManager.service
+# kernel-command-line.service: commands given with systemd.run= (tests) run
+# after the setup.
+Before=systemd-user-sessions.service getty-pre.target display-manager.service first-boot-complete.target kernel-command-line.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/bin/xctl setup
+# The dialog windows (whiptail) need to know the kind of terminal.
+Environment=TERM=linux
 ImportCredential=xeeonos.setup
 StandardInput=tty
 StandardOutput=tty

@@ -84,9 +84,11 @@ pub fn parse_entry(file: &str) -> Option<Entry> {
     })
 }
 
-/// Where the EFI System Partition is mounted (normally /efi).
+/// Where the kernels are: the boot partition (XBOOTLDR, /boot) if XeeonOS
+/// was installed next to another system with a small EFI System Partition,
+/// otherwise the EFI System Partition (normally /efi).
 pub fn esp() -> PathBuf {
-    output_opt("bootctl", &["--print-esp-path"])
+    output_opt("bootctl", &["--print-boot-path"])
         .filter(|p| !p.is_empty())
         .map_or_else(|| PathBuf::from("/efi"), PathBuf::from)
 }

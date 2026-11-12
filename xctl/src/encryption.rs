@@ -17,6 +17,16 @@
 //! partition with a new key (slow), so that a copy of the disk taken while
 //! the password was empty cannot be opened either.
 //!
+//! - **TPM** (`xctl encryption tpm on|off`, only with the password on): the
+//!   computer's TPM chip also holds a key, which it gives back only while
+//!   Secure Boot and its keys are unchanged (PCR 7). The disk then opens by
+//!   itself on this computer, and only when XeeonOS starts the way it was
+//!   signed; taken out, or started otherwise, it needs the password. The
+//!   password and the recovery key keep working. If the firmware's Secure
+//!   Boot settings change (an update of the firmware or of its list of
+//!   revoked signatures), the password is asked again: `xctl encryption tpm
+//!   on` then binds the key to the new state.
+//!
 //! The commands of cryptsetup and systemd-cryptenroll get the passwords
 //! through their standard input or environment, never on the command line
 //! (visible to every user in the process list).
@@ -35,15 +45,44 @@ const MAPPER: &str = "root";
 
 pub fn run_encryption(args: &[String]) -> Result<()> {
     let mut action = None;
+    let mut tpm = false;
     let mut reencrypt = false;
     let mut from_stdin = false;
     for arg in args {
         match arg.as_str() {
             "--reencrypt" => reencrypt = true,
             "--password-stdin" => from_stdin = true,
+            "tpm" if action.is_none() && !tpm => tpm = true,
             a @ ("status" | "on" | "off") if action.is_none() => action = Some(a),
             other => return Err(err(format!("unknown option for encryption: {other}"))),
         }
+    }
+    if tpm {
+        return match action {
+            Some("on") => {
+                need_root("encryption tpm on")?;
+                let password = match from_stdin {
+                    true => read_stdin_line()?,
+                    false => match ui::password(
+                        "Disk password",
+                        "The current disk password (or the recovery key):",
+                    )? {
+                        Some(p) => p,
+                        None => return Ok(()),
+                    },
+                };
+                tpm_on(&password)?;
+                println!("{TPM_ON_TEXT}");
+                Ok(())
+            }
+            Some("off") => {
+                need_root("encryption tpm off")?;
+                tpm_off()?;
+                println!("TPM unlock is off: the disk password is asked at every start.");
+                Ok(())
+            }
+            _ => Err(err("usage: xctl encryption tpm on|off")),
+        };
     }
     match action {
         None | Some("status") => {
@@ -56,6 +95,11 @@ pub fn run_encryption(args: &[String]) -> Result<()> {
                     "off (the disk opens without a password)"
                 }
             );
+            if tpm_set(&dev)? {
+                println!("tpm: on (the disk opens by itself on this computer, with Secure Boot)");
+            } else {
+                println!("tpm: off");
+            }
             Ok(())
         }
         Some("on") => {
@@ -93,11 +137,24 @@ pub fn run_encryption(args: &[String]) -> Result<()> {
 pub fn screen() -> Result<()> {
     let dev = data_partition()?;
     let on = password_set(&dev)?;
+    let tpm = on && tpm_set(&dev)?;
     let items: Vec<(String, String)> = if on {
-        vec![(
+        let mut items = vec![(
             "off".into(),
             "Turn the disk password off (the computer starts without it)".into(),
-        )]
+        )];
+        if tpm {
+            items.push((
+                "tpm-off".into(),
+                "Stop opening the disk with the TPM (ask the password)".into(),
+            ));
+        } else {
+            items.push((
+                "tpm-on".into(),
+                "Open the disk with the TPM on this computer (needs Secure Boot)".into(),
+            ));
+        }
+        items
     } else {
         vec![
             ("on".into(), "Turn on a disk password (instant)".into()),
@@ -107,10 +164,10 @@ pub fn screen() -> Result<()> {
             ),
         ]
     };
-    let state = if on {
-        "on: a password is asked at every start"
-    } else {
-        "off: the disk opens without a password"
+    let state = match (on, tpm) {
+        (true, true) => "on, opened by the TPM on this computer",
+        (true, false) => "on: a password is asked at every start",
+        _ => "off: the disk opens without a password",
     };
     let Some(choice) = ui::menu(
         "Disk encryption",
@@ -121,6 +178,24 @@ pub fn screen() -> Result<()> {
     else {
         return Ok(());
     };
+    if choice == "tpm-off" {
+        tpm_off()?;
+        return ui::message(
+            "Disk encryption",
+            "Done: the disk password is asked at every start.",
+        );
+    }
+    if choice == "tpm-on" {
+        let Some(password) = ui::password(
+            "Disk password",
+            "The current disk password (or the recovery key):",
+        )?
+        else {
+            return Ok(());
+        };
+        tpm_on(&password)?;
+        return ui::message("Disk encryption", TPM_ON_TEXT);
+    }
     if choice == "off" {
         let Some(password) = ui::password(
             "Disk password",
@@ -292,6 +367,59 @@ pub fn turn_off(password: &str) -> Result<()> {
     })
 }
 
+const TPM_ON_TEXT: &str = "TPM unlock is on: this computer opens the disk by itself while \
+     Secure Boot is unchanged. The password and the recovery key still work.";
+
+/// Let the TPM open the disk: a new key, sealed by the TPM to the current
+/// Secure Boot state (PCR 7), replacing an older TPM key. Opened with the
+/// password (or the recovery key).
+pub fn tpm_on(password: &str) -> Result<()> {
+    let dev = data_partition()?;
+    if !password_set(&dev)? {
+        return Err(err(
+            "turn the disk password on first (xctl encryption on): without it the \
+             disk opens by itself anyway",
+        ));
+    }
+    if crate::secureboot::state() != crate::secureboot::State::On {
+        return Err(err(
+            "Secure Boot is off: the TPM would open the disk for any system started \
+             on this computer. Turn Secure Boot on first (docs/secure-boot.md)",
+        ));
+    }
+    if !tpm2_present() {
+        return Err(err("this computer has no TPM 2.0 chip"));
+    }
+    // PCR 7 only, and no signed policy or pcrlock file (none is shipped).
+    cryptenroll(
+        &[
+            "--tpm2-device=auto",
+            "--tpm2-pcrs=7",
+            "--tpm2-public-key=",
+            "--wipe-slot=tpm2",
+        ],
+        &dev,
+        &[("PASSWORD", password)],
+    )
+    .map_err(|_| err("wrong password, or the TPM refused; nothing changed"))
+}
+
+/// Remove the TPM key (no password needed: nothing is added).
+pub fn tpm_off() -> Result<()> {
+    let dev = data_partition()?;
+    cryptenroll(&["--wipe-slot=tpm2"], &dev, &[])
+}
+
+/// Does the TPM hold a key for the partition?
+pub fn tpm_set(dev: &str) -> Result<bool> {
+    let json = output("cryptsetup", &["luksDump", "--dump-json-metadata", dev])?;
+    Ok(has_token(&json, "systemd-tpm2"))
+}
+
+fn tpm2_present() -> bool {
+    std::fs::read_to_string("/sys/class/tpm/tpm0/tpm_version_major").is_ok_and(|v| v.trim() == "2")
+}
+
 /// Run systemd-cryptenroll on `dev`, with secrets in the environment.
 fn cryptenroll(args: &[&str], dev: &str, env: &[(&str, &str)]) -> Result<()> {
     let status = Command::new("systemd-cryptenroll")
@@ -342,10 +470,14 @@ pub fn password_set(dev: &str) -> Result<bool> {
 }
 
 fn has_recovery_token(json: &str) -> bool {
+    has_token(json, "systemd-recovery")
+}
+
+fn has_token(json: &str, kind: &str) -> bool {
     let meta: Value = serde_json::from_str(json).unwrap_or_default();
     meta["tokens"]
         .as_object()
-        .is_some_and(|t| t.values().any(|v| v["type"] == "systemd-recovery"))
+        .is_some_and(|t| t.values().any(|v| v["type"] == kind))
 }
 
 /// All key slots of the partition.
@@ -406,5 +538,8 @@ mod tests {
         let on =
             r#"{"keyslots":{"1":{}},"tokens":{"0":{"type":"systemd-recovery","keyslots":["1"]}}}"#;
         assert!(has_recovery_token(on));
+        assert!(!has_token(on, "systemd-tpm2"));
+        let tpm = r#"{"keyslots":{"1":{},"2":{}},"tokens":{"0":{"type":"systemd-recovery"},"1":{"type":"systemd-tpm2"}}}"#;
+        assert!(has_token(tpm, "systemd-tpm2"));
     }
 }

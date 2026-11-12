@@ -66,6 +66,9 @@ pub fn run(check: bool) -> Result<()> {
     let encryption = match crate::encryption::data_partition() {
         Err(_) => "no".to_string(),
         Ok(dev) if crate::util::is_root() => match crate::encryption::password_set(&dev) {
+            Ok(true) if crate::encryption::tpm_set(&dev).unwrap_or(false) => {
+                "yes, password on, opened by the TPM".to_string()
+            }
             Ok(true) => "yes, password on".to_string(),
             Ok(false) => "yes, password off (opens by itself)".to_string(),
             Err(_) => "yes".to_string(),
@@ -73,6 +76,7 @@ pub fn run(check: bool) -> Result<()> {
         Ok(_) => "yes".to_string(),
     };
     println!("Encrypted:   {encryption}");
+    println!("Secure Boot: {}", crate::secureboot::describe());
     for v in crate::boot::bad_versions() {
         if crate::version::compare(&v, version) == std::cmp::Ordering::Greater {
             println!(

@@ -16,10 +16,15 @@ concurrency:
 #   xctl -> build -> test (one job per feature, in parallel) -> publish
 #
 # Every run builds and tests everything. Everything is built once, in
-# `build`; each test job starts from a clean copy of what it built (artifacts
-# of this run, kept 3 days), so the test jobs are independent: one failure
-# does not stop the others, and "Re-run failed jobs" repeats only the failed
-# ones, without building again. Downloaded packages are cached (see `build`).
+# `build`; each test job starts from a clean copy of what it built (artifacts,
+# kept 3 days), so the test jobs are independent: one failure does not stop
+# the others, and "Re-run failed jobs" repeats only the failed ones, without
+# building again. Downloaded packages are cached (see `build`).
+#
+# One exception, for pull requests only: when the previous run of the same
+# pull request failed and nothing that goes into the images changed since
+# (same tools/image-key.sh fingerprint: only tests or docs changed), `build` reuses that run's images instead of building them again,
+# and the tests run on them. Channel branches always build.
 # The tests are in tools/ci/ (one script per job, see tools/ci/README.md).
 jobs:
   xctl:
@@ -40,17 +45,61 @@ jobs:
     needs: xctl
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.images.outputs.version }}
+      run: ${{ steps.images.outputs.run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The version, and the run whose artifacts the tests use: this one, or
+      # (pull requests) the previous failed run when the images would be the
+      # same. image-key.txt records "<fingerprint> <version> <run>" for the
+      # next run to compare.
+      - name: Build, or reuse the images of the last failed run
+        id: images
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          key=$(tools/image-key.sh)
+          version=$(tools/version.sh)
+          run=$GITHUB_RUN_ID
+          if [[ $GITHUB_EVENT_NAME == pull_request ]]; then
+            # The newest finished run of this pull request (cancelled runs
+            # are skipped): only a failed one is reused.
+            prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?branch=$GITHUB_HEAD_REF&event=pull_request&status=completed&per_page=10" \
+              --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID and .conclusion != \"cancelled\")][0] | select(.conclusion == \"failure\") | .id")
+            if [[ -n $prev ]] && gh run download "$prev" --name image-key --dir "$RUNNER_TEMP/prev" 2>/dev/null; then
+              read -r prev_key prev_version prev_run < "$RUNNER_TEMP/prev/image-key.txt"
+              # Its images must still be there (artifacts are kept 3 days).
+              have=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$prev_run/artifacts?per_page=100" \
+                --jq '[.artifacts[] | select(.expired | not) | .name | select(. == "disk-image" or . == "update-system" or . == "update-next" or . == "live")] | length')
+              if [[ $prev_key == "$key" && $have == 4 ]]; then
+                version=$prev_version
+                run=$prev_run
+                echo "REUSE=yes" >> "$GITHUB_ENV"
+                echo "Images reused from run $prev_run (XeeonOS $version): nothing that goes into them changed since the failed run $prev." >> "$GITHUB_STEP_SUMMARY"
+              fi
+            fi
+          fi
+          mkdir -p out/image-key
+          echo "$key $version $run" > out/image-key/image-key.txt
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
       - name: Install mkosi
+        if: env.REUSE != 'yes'
         uses: systemd/mkosi@ecf7f5702bb2052b7a69cab3fe7d37bc3b9ad77b # v27.1
 
       - name: Free disk space (three images are built)
+        if: env.REUSE != 'yes'
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           sudo apt-get update
-          sudo apt-get install --assume-yes --no-install-recommends zstd
+          sudo apt-get install --assume-yes --no-install-recommends zstd sbsigntool
           df -h /
 
       # Downloaded packages are kept between runs. They come from the dated
@@ -58,8 +107,10 @@ jobs:
       # same files: the cache saves the downloads, never changes the result.
       # A new snapshot date starts a new cache.
       - name: Find the Arch snapshot
+        if: env.REUSE != 'yes'
         run: echo "SNAPSHOT=$(sed -n 's/^Snapshot=//p' mkosi.conf | tr / -)" >> "$GITHUB_ENV"
       - name: Package cache
+        if: env.REUSE != 'yes'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: mkosi.pkgcache
@@ -67,37 +118,57 @@ jobs:
           restore-keys: arch-packages-${{ env.SNAPSHOT }}-
 
       - name: Compute version
+        if: env.REUSE != 'yes'
         run: |
           echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
           # The "next" version, built only to test updating to it.
           echo "NEXT=$(tools/version.sh).1" >> "$GITHUB_ENV"
 
+      # UEFI Secure Boot (docs/secure-boot.md): pull requests are signed with
+      # a throwaway key made for this run; channel builds with the XeeonOS
+      # key (secret XEEONOS_SECUREBOOT_KEY, never given to pull requests).
+      - name: Secure Boot signing key
+        if: env.REUSE != 'yes'
+        env:
+          XEEONOS_SECUREBOOT_KEY: ${{ github.event_name != 'pull_request' && secrets.XEEONOS_SECUREBOOT_KEY || '' }}
+        run: |
+          if [[ $GITHUB_EVENT_NAME == pull_request ]]; then
+            tools/secureboot.sh --test "$RUNNER_TEMP/secureboot"
+          else
+            tools/secureboot.sh "$RUNNER_TEMP/secureboot"
+          fi
+          echo "SECUREBOOT=$(tr '\n' ' ' < "$RUNNER_TEMP/secureboot/mkosi-args")" >> "$GITHUB_ENV"
+
       # The system: the full disk image (first-boot tests) and its update
       # files (installed by the ISO, published on channel branches).
       - name: Build the system
+        if: env.REUSE != 'yes'
         run: |
           mkdir -p mkosi.cache mkosi.pkgcache out/disk-image
-          mkosi --force --image-version="$VERSION" build
+          mkosi $SECUREBOOT --force --image-version="$VERSION" build
           ls -lhs mkosi.output/
           zstd -T0 --quiet "mkosi.output/xeeonos_$VERSION.raw" -o "out/disk-image/xeeonos_$VERSION.raw.zst"
           tools/mkupdate.sh mkosi.output "$VERSION" out/update-system
           rm -rf mkosi.output
 
       - name: Build the next version (for the update test)
+        if: env.REUSE != 'yes'
         run: |
-          mkosi --force --image-version="$NEXT" build
+          mkosi $SECUREBOOT --force --image-version="$NEXT" build
           tools/mkupdate.sh mkosi.output "$NEXT" out/update-next
           rm -rf mkosi.output
 
       - name: Build the live image (UKI)
+        if: env.REUSE != 'yes'
         run: |
-          mkosi --force --profile=live --image-version="$VERSION" build
+          mkosi $SECUREBOOT --force --profile=live --image-version="$VERSION" build
           mkdir -p out/live
           mv "mkosi.output/xeeonos_$VERSION.efi" out/live/
           rm -rf mkosi.output
           ls -lhR out/
 
       - name: Upload the disk image
+        if: env.REUSE != 'yes'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: disk-image
@@ -106,6 +177,7 @@ jobs:
           compression-level: 0
 
       - name: Upload the system update files
+        if: env.REUSE != 'yes'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: update-system
@@ -114,6 +186,7 @@ jobs:
           compression-level: 0
 
       - name: Upload the next version's update files
+        if: env.REUSE != 'yes'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: update-next
@@ -122,10 +195,18 @@ jobs:
           compression-level: 0
 
       - name: Upload the live image
+        if: env.REUSE != 'yes'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: live
           path: out/live/
+          retention-days: 3
+
+      - name: Upload the image fingerprint
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-key
+          path: out/image-key/
           retention-days: 3
 
   test:
@@ -133,6 +214,9 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -145,6 +229,7 @@ jobs:
           - {test: base, artifacts: disk-image}
           - {test: snapshots, artifacts: disk-image}
           - {test: hibernate, artifacts: disk-image}
+          - {test: secureboot, artifacts: '{disk-image,update-next}'}
           - {test: iso-install, artifacts: '{live,update-system}'}
           - {test: iso-alongside, artifacts: '{live,update-system}'}
     steps:
@@ -154,18 +239,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --assume-yes --no-install-recommends \
-            qemu-system-x86 ovmf zstd dosfstools mtools xorriso fdisk
+            qemu-system-x86 ovmf swtpm zstd dosfstools mtools xorriso fdisk
 
-      - name: Compute version
+      # The version of the images (they may come from an earlier run).
+      - name: Version under test
         run: |
-          echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
-          echo "NEXT=$(tools/version.sh).1" >> "$GITHUB_ENV"
+          echo "VERSION=${{ needs.build.outputs.version }}" >> "$GITHUB_ENV"
+          echo "NEXT=${{ needs.build.outputs.version }}.1" >> "$GITHUB_ENV"
 
       - name: Download what the build made
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: ${{ matrix.artifacts }}
           path: build
+          run-id: ${{ needs.build.outputs.run }}
+          github-token: ${{ github.token }}
 
       - name: Run tools/ci/${{ matrix.test }}.sh
         run: tools/ci/${{ matrix.test }}.sh

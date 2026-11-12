@@ -15,6 +15,7 @@ mod oci;
 mod packages;
 mod recovery;
 mod report;
+mod secureboot;
 mod setup;
 mod snapshots;
 mod status;
@@ -108,6 +109,9 @@ Commands:
                          recovery key, shown once. off: no password.
       --reencrypt        With on: also re-encrypt everything (slow).
       --password-stdin   Read the password from standard input.
+  encryption tpm on|off  With the password on: let this computer's TPM open
+                         the disk by itself while Secure Boot is unchanged
+                         (the password and recovery key still work).
   recovery               Restart into Recovery (asks first). In Recovery,
                          show the Recovery menu: reinstall, previous version,
                          restore data, network, shell, erase everything,

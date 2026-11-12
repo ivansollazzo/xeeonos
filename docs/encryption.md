@@ -62,7 +62,8 @@ and digits are in the same place as on most keyboards; some symbols are not).
   input, never their command line. (cryptsetup's command line cannot use an
   empty password at all, which is why the empty one is always handled by
   systemd-cryptenroll.)
-- No TPM for now: it will come with Secure Boot.
+- TPM unlock (`xctl encryption tpm on|off`, with the password on and Secure
+  Boot on): see [secure-boot.md](secure-boot.md#tpm-unlock).
 
 Systems installed before encryption existed have an unencrypted data
 partition; `xctl encryption` says so. Reinstalling makes it encrypted.

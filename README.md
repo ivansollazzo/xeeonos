@@ -83,7 +83,9 @@ workflow run as the `xeeonos-iso` artifact.
 - **Virtual machine**: open the ISO in GNOME Boxes, virt-manager or VirtualBox with
   **UEFI** firmware enabled.
 - **USB stick**: write it with `dd`, Etcher or Ventoy, then pick the stick from your
-  PC's boot menu. Secure Boot must be disabled for now.
+  PC's boot menu. XeeonOS is signed with its own Secure Boot key: turn
+  Secure Boot off to try it, or enroll the XeeonOS keys
+  ([docs/secure-boot.md](docs/secure-boot.md)).
 
 The live system runs entirely from RAM (allow at least 4 GB) and logs in as
 `root` on the console. It does not touch your disks unless you install:

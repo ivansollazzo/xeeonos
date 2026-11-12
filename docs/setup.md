@@ -1,13 +1,22 @@
 # First boot
 
-At the first boot, before the login prompt, `xctl setup` asks:
+At the first boot, before the login prompt, `xctl setup` asks, in black and
+white dialog windows ("Back" goes to the previous step):
 
 - the **language** (a short list, or any other locale name such as
   `nl_NL.UTF-8`: every language is in the image);
-- the **keyboard layout** and **time zone** (suggested from the language);
+- the **keyboard layout** (suggested from the language);
+- the **time zone** (suggested from the language; region, then city);
+- the **network**: a wired or Wi-Fi connection, automatic (DHCP) or with a
+  manual address, gateway and DNS (`xctl network`, see below); "Done" skips
+  it;
 - the **computer name**;
 - the **first user**: full name, user name, password, and whether it is an
   administrator (member of `wheel`, can use `sudo`).
+
+Language, keyboard and time zone take effect as soon as they are chosen:
+after choosing the Italian keyboard, the next answer is already typed with
+it. The account is created at the end.
 
 The root account stays locked: administrators use `sudo`.
 
@@ -23,6 +32,12 @@ Everything is written to `/etc` and `/home` on the data partition; the sealed
 - Keyboard: `sudo localectl set-keymap de`.
 - Time zone: `sudo timedatectl set-timezone Europe/Berlin`.
 - Computer name: `sudo hostnamectl hostname my-pc`.
+- Network: `sudo xctl network` (the same window as in the setup), or
+  `nmtui`. Without a terminal:
+  `sudo xctl network ethernet --address 192.168.1.20/24 --gateway 192.168.1.1 --dns 1.1.1.1`,
+  `sudo xctl network ethernet --dhcp`,
+  `sudo xctl network wifi "My network" --password ...`,
+  `xctl network status`.
 - Users: `useradd`, `passwd`, `usermod -aG wheel <user>` as usual.
 
 With Plasma (Phase 2) the same settings are in System Settings, and the

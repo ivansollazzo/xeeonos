@@ -12,7 +12,9 @@ ConditionPathExists=!/var/lib/xeeonos/setup-done
 ConditionKernelCommandLine=!systemd.firstboot=no
 Wants=NetworkManager.service first-boot-complete.target
 After=NetworkManager.service
-Before=systemd-user-sessions.service getty-pre.target display-manager.service first-boot-complete.target
+# kernel-command-line.service: commands given with systemd.run= (tests) run
+# after the setup.
+Before=systemd-user-sessions.service getty-pre.target display-manager.service first-boot-complete.target kernel-command-line.service
 
 [Service]
 Type=oneshot

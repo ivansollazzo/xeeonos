@@ -1,7 +1,7 @@
 //! xctl - the XeeonOS system tool.
 //!
 //! Commands: `status`, `update`, `rollback`, `channel`, `packages`, `setup`,
-//! `install-system`. Each command lives in its own module (file) below.
+//! `install-system`, `recovery`, `network`. Each command lives in its own module (file) below.
 
 mod boot;
 mod channel;
@@ -66,9 +66,14 @@ Commands:
                          first boot).
   install-system [options]
                          Install XeeonOS onto a disk, from the live ISO or
-                         from Recovery.
-                         The whole disk is erased (you are asked to confirm).
-      --disk <device>    The disk, e.g. /dev/sda (asked if not given).
+                         from Recovery: on a whole disk (erased), or next
+                         to another system in its free space (asked in
+                         dialog windows if --disk is not given).
+      --disk <device>    The disk, e.g. /dev/sda.
+      --free-space       Use the free space of the disk; keep the other
+                         partitions.
+      --separate-boot    With --free-space: put the kernels in a new boot
+                         partition, even if the EFI partition has room.
       --from <dir>       Install the version in <dir> instead of the one
                          on the installation medium.
       --yes              Do not ask for confirmation (for automated tests).

@@ -47,6 +47,7 @@ tools/boot-test.sh \
     --expect "xeeonos_$NEXT  \(running\)" \
     --expect "xeeonos_${VERSION}[[:space:]]*\$" \
     --expect "$NEXT +good, running" \
+    --expect "Snapshot: +.*-before-$NEXT" \
     --expect "check: sealed system OK" \
     out/disk.raw out/serial-3-after-update.log
 echo "::endgroup::"

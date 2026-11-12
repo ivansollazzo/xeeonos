@@ -83,9 +83,18 @@ pub fn run(args: &[String]) -> Result<()> {
     let source = match from {
         Some(f) => Source::parse(&f),
         None => {
-            let channel = channel::current()?.ok_or_else(|| {
-                err("this is a development build without an update channel; use --from <source>")
-            })?;
+            let Some(channel) = channel::current()? else {
+                if check {
+                    // The daily check on a development build: nothing to follow.
+                    println!(
+                        "This is a development build without an update channel: nothing to check."
+                    );
+                    return Ok(());
+                }
+                return Err(err(
+                    "this is a development build without an update channel; use --from <source>",
+                ));
+            };
             Source::Oci(format!("{}:{channel}", config::REGISTRY))
         }
     };
@@ -110,6 +119,8 @@ pub fn run(args: &[String]) -> Result<()> {
         .into_iter()
         .max_by(|a, b| compare(a, b))
         .ok_or_else(|| err("the source contains no XeeonOS version"))?;
+    // Whatever the outcome, the "update available" note is refreshed below.
+    set_available(None);
     match compare(&new, &current) {
         Ordering::Equal => {
             println!("XeeonOS {current} is up to date.");
@@ -132,6 +143,7 @@ pub fn run(args: &[String]) -> Result<()> {
         return Ok(());
     }
     if check {
+        set_available(Some(&new));
         println!(
             "XeeonOS {new} is available (running: {current}). Install it with: sudo xctl update"
         );
@@ -141,11 +153,41 @@ pub fn run(args: &[String]) -> Result<()> {
     // Only now the large files.
     fetch_files(&source, cache, &names)?;
     check_hashes(cache)?;
+    // A copy of the data to go back to (xctl snapshots), if it can be taken.
+    match crate::snapshots::create(&format!("before-{new}")) {
+        Ok(name) => println!("Snapshot of the data: {name}"),
+        Err(e) => println!("No snapshot of the data: {e}"),
+    }
     println!("Installing XeeonOS {new} (running: {current})...");
     // The files were verified above against the signed manifest.
     run_program(config::SYSUPDATE, &["update", &new])?;
     println!("XeeonOS {new} is installed. Restart to start using it.");
     Ok(())
+}
+
+/// Remember (or forget) that a newer version is available, for the message
+/// at login and `xctl status`. Only root can write it (the daily check runs as
+/// root); for others this does nothing.
+fn set_available(version: Option<&str>) {
+    let file = Path::new(config::UPDATE_AVAILABLE);
+    match version {
+        Some(v) => {
+            if let Some(dir) = file.parent() {
+                let _ = fs::create_dir_all(dir);
+            }
+            let _ = fs::write(file, format!("{v}\n"));
+        }
+        None => {
+            let _ = fs::remove_file(file);
+        }
+    }
+}
+
+/// The version noted by the last check, if a newer one is available.
+pub fn available() -> Option<String> {
+    let v = fs::read_to_string(config::UPDATE_AVAILABLE).ok()?;
+    let v = v.trim();
+    (!v.is_empty()).then(|| v.to_string())
 }
 
 /// Removes a directory when it goes out of scope (Rust's "Drop" trait).

@@ -1,0 +1,12 @@
+# Read all the data on the data partition and check it against its checksums
+# (Btrfs scrub): damage is found early, while the snapshots are still good.
+# At idle priority, so it does not slow the computer down.
+[Unit]
+Description=Check the data partition for damage (Btrfs scrub)
+ConditionPathIsMountPoint=/
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/btrfs scrub start -B -c 3 /
+Nice=19
+IOSchedulingClass=idle

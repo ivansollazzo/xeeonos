@@ -73,6 +73,15 @@ pub fn run(check: bool) -> Result<()> {
         Ok(_) => "yes".to_string(),
     };
     println!("Encrypted:   {encryption}");
+    if let Some(v) = crate::update::available() {
+        println!("Update:      XeeonOS {v} is available (sudo xctl update)");
+    }
+    if let Some(last) = crate::snapshots::list()
+        .ok()
+        .and_then(|l| l.last().cloned())
+    {
+        println!("Snapshot:    {last} (newest; see xctl snapshots)");
+    }
 
     let mut slots = Vec::new();
     // `if let ... && let ...` ("let chains"): both must match.

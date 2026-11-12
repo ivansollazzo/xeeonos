@@ -1,0 +1,8 @@
+# Services of the installed system (not of the live ISO), enabled by default.
+enable xeeonos-firewall.service
+enable xeeonos-update-check.timer
+enable xeeonos-scrub.timer
+# TRIM for the SSD, once a week (util-linux).
+enable fstrim.timer
+# Firmware metadata (fwupd), so that `fwupdmgr get-updates` knows what is new.
+enable fwupd-refresh.timer

@@ -47,6 +47,11 @@ the manifest lists, checks their hashes, and only then runs
 (`/usr/lib/sysupdate.d/`). Updates only move forward: a channel with an older
 version installs nothing. `--check` stops after the version check.
 
+Before writing the new version, `xctl update` takes a snapshot of the
+settings and users' files ([snapshots.md](snapshots.md)). A timer runs
+`xctl update --check` every day and `xctl status` and the login message say
+when a new version is available ([maintenance.md](maintenance.md)).
+
 ## Channels and versions
 
 The channel is the branch: `experimental`, then `<N>.x/alpha`, `<N>.x/beta`,

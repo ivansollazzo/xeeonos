@@ -1,17 +1,21 @@
 //! xctl - the XeeonOS system tool.
 //!
 //! Commands: `status`, `update`, `rollback`, `channel`, `packages`, `setup`,
-//! `install-system`, `recovery`, `network`, `encryption`. Each command lives in its own module (file) below.
+//! `install-system`, `recovery`, `network`, `encryption`, `firewall`, `snapshots`,
+//! `report`. Each command lives in its own module (file) below.
 
 mod boot;
 mod channel;
 mod encryption;
+mod firewall;
 mod install;
 mod network;
 mod oci;
 mod packages;
 mod recovery;
+mod report;
 mod setup;
+mod snapshots;
 mod status;
 mod ui;
 mod update;
@@ -27,6 +31,9 @@ mod config {
     pub const KEYRING: &str = "/usr/lib/xeeonos/update-keyring.gpg";
     /// Download directory; the sysupdate.d transfer files read from here.
     pub const CACHE: &str = "/var/cache/xctl/update";
+    /// Written by `xctl update --check` (as root) when a newer version is
+    /// available: shown at login and by `xctl status`.
+    pub const UPDATE_AVAILABLE: &str = "/var/lib/xeeonos/update-available";
     /// The channel chosen by the administrator, if any.
     pub const CHANNEL_FILE: &str = "/etc/xeeonos/channel";
     pub const OS_RELEASE: &str = "/usr/lib/os-release";
@@ -96,7 +103,20 @@ Commands:
       --password-stdin   Read the password from standard input.
   recovery               Restart into Recovery (asks first). In Recovery,
                          show the Recovery menu: reinstall, previous version,
-                         network, shell, erase everything, restart.
+                         restore data, network, shell, erase everything,
+                         restart.
+  firewall [status]      Show the firewall (closed to incoming connections).
+  firewall allow|deny <port>/<tcp|udp>
+                         Open or close a port for incoming connections.
+  snapshots [list]       Show the copies of the data (settings and users'
+                         files) taken before every update.
+  snapshots create       Take one now.
+  snapshots restore <name> [--yes]
+                         In Recovery: bring back settings and files as they
+                         were in that snapshot (the current state is saved
+                         first).
+  report                 Write a report for a bug (versions, disks, logs)
+                         to /var/tmp, to attach to it.
   help                   Show this help.";
 
 fn main() {
@@ -117,6 +137,9 @@ fn main() {
         "setup" => setup::run_setup(rest),
         "channel" => channel::run(rest),
         "network" => network::run_network(rest),
+        "firewall" => firewall::run_firewall(rest),
+        "snapshots" => snapshots::run_snapshots(rest),
+        "report" => report::run_report(rest),
         "encryption" => match rest.is_empty() {
             true if ui::interactive() => {
                 util::need_root("encryption").and_then(|_| encryption::screen())

@@ -133,8 +133,10 @@ fn parse_loader_entries(data: &[u8]) -> Vec<String> {
     let units: Vec<u16> = data
         .get(4..)
         .unwrap_or_default()
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| u16::from_le_bytes(*c))
         .collect();
     units
         .split(|u| *u == 0)

@@ -94,8 +94,9 @@ fn restart_into_recovery(yes: bool) -> Result<()> {
 
 /// The boot menu entry of Recovery for the running version. The running
 /// entry is "selected" in `bootctl list --json=short`; its Recovery entry is
-/// the second profile of the same kernel image, which systemd-boot calls
-/// `<id>@1`. systemd-boot's own list of entries (`loader`, from the
+/// the second profile of the same kernel image, which systemd-boot names
+/// after the profile's ID: `<id>@recovery` (`ID=recovery` in
+/// recovery.profile; `<id>@1` for a profile without an ID). systemd-boot's own list of entries (`loader`, from the
 /// LoaderEntries EFI variable) is checked first: `bootctl set-oneshot` takes
 /// systemd-boot's names.
 fn recovery_entry(json: &str, loader: &[String]) -> Result<String> {
@@ -108,7 +109,7 @@ fn recovery_entry(json: &str, loader: &[String]) -> Result<String> {
         .and_then(|e| e["id"].as_str())
         .ok_or_else(|| err("cannot find the running version in the boot menu"))?;
     let base = selected.split('@').next().unwrap_or(selected);
-    let wanted = format!("{base}@1");
+    let wanted = [format!("{base}@recovery"), format!("{base}@1")];
     let ids: Vec<String> = loader
         .iter()
         .cloned()
@@ -119,7 +120,7 @@ fn recovery_entry(json: &str, loader: &[String]) -> Result<String> {
         )
         .collect();
     ids.iter()
-        .find(|id| **id == wanted)
+        .find(|id| wanted.contains(id))
         .cloned()
         .ok_or_else(|| {
             err(format!(
@@ -298,32 +299,35 @@ mod tests {
     fn finds_recovery_entry() {
         let json = r#"[
             {"id":"xeeonos_1.0.1.efi","isSelected":false},
-            {"id":"xeeonos_1.0.1.efi@1","isSelected":false},
+            {"id":"xeeonos_1.0.1.efi@recovery","isSelected":false},
             {"id":"xeeonos_1.0.2.efi","isSelected":true},
-            {"id":"xeeonos_1.0.2.efi@1","isSelected":false}
+            {"id":"xeeonos_1.0.2.efi@recovery","isSelected":false}
         ]"#;
-        assert_eq!(recovery_entry(json, &[]).unwrap(), "xeeonos_1.0.2.efi@1");
+        assert_eq!(
+            recovery_entry(json, &[]).unwrap(),
+            "xeeonos_1.0.2.efi@recovery"
+        );
         assert!(recovery_entry("[]", &[]).is_err());
         // Only systemd-boot knows the Recovery entry.
         let json = r#"[{"id":"xeeonos_1.0.2.efi","isSelected":true}]"#;
         let loader = vec![
             "xeeonos_1.0.2.efi".to_string(),
-            "xeeonos_1.0.2.efi@1".to_string(),
+            "xeeonos_1.0.2.efi@recovery".to_string(),
         ];
         assert_eq!(
             recovery_entry(json, &loader).unwrap(),
-            "xeeonos_1.0.2.efi@1"
+            "xeeonos_1.0.2.efi@recovery"
         );
     }
 
     #[test]
     fn loader_variable() {
         let mut data = vec![7, 0, 0, 0];
-        for name in ["a.efi", "a.efi@1"] {
+        for name in ["a.efi", "a.efi@recovery"] {
             for u in name.encode_utf16().chain([0]) {
                 data.extend(u.to_le_bytes());
             }
         }
-        assert_eq!(parse_loader_entries(&data), vec!["a.efi", "a.efi@1"]);
+        assert_eq!(parse_loader_entries(&data), vec!["a.efi", "a.efi@recovery"]);
     }
 }

@@ -12,7 +12,7 @@ Prints, in Markdown, for the pull request of .github/workflows/snapshot.yml:
 
 Arch supports only whole upgrades, so a single package cannot be held back:
 if something looks risky, the snapshot pull request is simply not merged
-(next week's run updates it with a newer date).
+(the next run updates it with a newer date).
 
 The exit code is 0 when nothing needs attention, 10 when there is news or a
 new major version of an important package: the workflow then opens the pull
@@ -170,7 +170,7 @@ def main():
         out.append("None.")
     out += ["", "Arch supports only whole upgrades, so one package cannot be held "
             "back. If something here looks risky, leave this pull request open: "
-            "next week's run moves it to a newer snapshot."]
+            "the next run moves it to a newer snapshot."]
     print("\n".join(out))
     return 10 if attention else 0
 

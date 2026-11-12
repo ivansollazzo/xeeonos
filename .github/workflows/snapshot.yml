@@ -1,6 +1,6 @@
 name: Arch snapshot
 
-# Every week, a pull request that moves XeeonOS to a newer snapshot of the
+# On request (Actions > Arch snapshot > Run workflow), a pull request that moves XeeonOS to a newer snapshot of the
 # Arch Linux Archive (Snapshot= in mkosi.conf): new kernel, libraries and
 # security fixes, while every build stays reproducible. The pull request is
 # tested like any other and merged by hand.
@@ -16,9 +16,10 @@ name: Arch snapshot
 # with "Contents" and "Pull requests" read/write. (Pull requests opened with
 # the workflow's own token would not start the CI.) Without it, the workflow
 # only says what it would do.
+#
+# For now it runs only by hand: XeeonOS stays on the current snapshot until
+# we choose how often to move (daily or weekly: add a `schedule:` here).
 on:
-  schedule:
-    - cron: '0 5 * * 1'   # Mondays, 05:00 UTC
   workflow_dispatch:
 
 permissions:

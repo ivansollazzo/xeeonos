@@ -1,0 +1,9 @@
+# Keeps the GitHub Actions used by CI up to date: they are pinned to exact
+# commits, and Dependabot opens a pull request when a new version comes out.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: experimental

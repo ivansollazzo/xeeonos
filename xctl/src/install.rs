@@ -220,9 +220,12 @@ pub fn run_install(args: &[String]) -> Result<()> {
     );
     let defs = TempDir::new("xctl-install-repart")?;
     write_definitions(&defs.0, &payload, new_boot)?;
-    run(
-        "systemd-repart",
-        &[
+    // (The ESP may just have been mounted to measure it: let udev finish.)
+    let _ = run("udevadm", &["settle"]);
+    // SYSTEMD_LOG_TARGET=console: its messages on the screen, also when the
+    // installer runs as a service (tests), not only in the journal.
+    let status = Command::new("systemd-repart")
+        .args([
             // The whole disk: a new partition table. The free space: the
             // existing partitions stay as they are.
             if space == Space::Whole {
@@ -233,8 +236,16 @@ pub fn run_install(args: &[String]) -> Result<()> {
             "--dry-run=no",
             &format!("--definitions={}", defs.0.display()),
             &disk.path,
-        ],
-    )?;
+        ])
+        .env("SYSTEMD_LOG_TARGET", "console")
+        .status()
+        .map_err(|e| err(format!("cannot run systemd-repart: {e}")))?;
+    if !status.success() {
+        return Err(err(format!(
+            "creating the partitions on {} failed (see the messages above)",
+            disk.path
+        )));
+    }
     // Wait until udev has created the device nodes of the new partitions.
     run("udevadm", &["settle"])?;
 

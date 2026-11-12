@@ -252,6 +252,9 @@ jobs:
         # Recovery at the next boot only (one-shot boot menu choice); in
         # Recovery, "erase" asks for a factory reset; at the boot after that
         # the data partition is new: the user created by the setup is gone.
+        # (While the test command runs, xeeonos-recovery.target is still being
+        # started: it waits for the units it pulls in, the command included. So
+        # the test looks for its start job, not for "active".)
         # (The commands write "xeeonos[.]recovery": the command itself is on
         # the kernel command line, and must not contain the Recovery word.)
         run: |
@@ -260,9 +263,9 @@ jobs:
             --expect "Restarting into Recovery \(xeeonos_${VERSION}\.efi@recovery\)" \
             out/disk.raw out/serial-9a-to-recovery.log
           tools/boot-test.sh --efivars out/vars-9.fd \
-            --run "/bin/sh -c 'grep -qw xeeonos[.]recovery /proc/cmdline && echo IN-RECOVERY; systemctl is-active xeeonos-recovery.target | sed s,^,TARGET-,; command -v nmtui && echo HAS-NMTUI; xctl recovery erase --yes'" \
+            --run "/bin/sh -c 'grep -qw xeeonos[.]recovery /proc/cmdline && echo IN-RECOVERY; systemctl list-jobs --no-legend | grep xeeonos-recovery.target | sed s,^,TARGET-JOB-,; command -v nmtui && echo HAS-NMTUI; xctl recovery erase --yes'" \
             --expect "IN-RECOVERY" \
-            --expect "TARGET-active" \
+            --expect "TARGET-JOB-.*xeeonos-recovery.target +start" \
             --expect "HAS-NMTUI" \
             --expect "All data will be erased at the restart" \
             out/disk.raw out/serial-9b-recovery.log

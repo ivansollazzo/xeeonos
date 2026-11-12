@@ -98,7 +98,7 @@ jobs:
           ls -lhR out/
 
       - name: Upload the disk image
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: disk-image
           path: out/disk-image/
@@ -106,7 +106,7 @@ jobs:
           compression-level: 0
 
       - name: Upload the system update files
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: update-system
           path: out/update-system/
@@ -114,7 +114,7 @@ jobs:
           compression-level: 0
 
       - name: Upload the next version's update files
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: update-next
           path: out/update-next/
@@ -122,7 +122,7 @@ jobs:
           compression-level: 0
 
       - name: Upload the live image
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: live
           path: out/live/
@@ -169,7 +169,7 @@ jobs:
 
       - name: Upload ISO
         if: success() && matrix.test == 'iso-install'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: xeeonos-iso
           path: out/*.iso
@@ -178,7 +178,7 @@ jobs:
 
       - name: Upload boot logs
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: serial-logs-${{ matrix.test }}
           path: out/serial-*.log

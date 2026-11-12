@@ -22,7 +22,8 @@ with `fwupdmgr get-updates` and installed with `sudo fwupdmgr update`.
 Swap is first compressed memory (zram, zstd, priority 100), up to half of
 the RAM and at most 8 GB; the kernel settings that suit it are in
 `/usr/lib/sysctl.d/90-xeeonos-zram.conf`. Behind it is a swap file as large
-as the RAM (`/swap/swapfile`, priority 10), created at the first boot by
+as the RAM, but at most a quarter of the data partition (`/swap/swapfile`,
+priority 10), created at the first boot by
 `xeeonos-swapfile.service` in its own Btrfs subvolume: encrypted with the
 rest of the data, and left out of the snapshots.
 

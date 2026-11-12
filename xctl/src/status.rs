@@ -73,6 +73,13 @@ pub fn run(check: bool) -> Result<()> {
         Ok(_) => "yes".to_string(),
     };
     println!("Encrypted:   {encryption}");
+    for v in crate::boot::bad_versions() {
+        if crate::version::compare(&v, version) == std::cmp::Ordering::Greater {
+            println!(
+                "Update:      XeeonOS {v} is turned off here (it did not start, or you went back from it); sudo xctl update installs it again"
+            );
+        }
+    }
     if let Some(v) = crate::update::available() {
         println!("Update:      XeeonOS {v} is available (sudo xctl update)");
     }

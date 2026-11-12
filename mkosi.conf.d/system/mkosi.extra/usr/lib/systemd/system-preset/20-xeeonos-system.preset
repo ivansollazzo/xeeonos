@@ -4,8 +4,8 @@ enable xeeonos-update-check.timer
 enable xeeonos-scrub.timer
 # Disk health (Btrfs errors, SMART), daily.
 enable xeeonos-health.timer
-# The swap file behind zram, created at the first boot.
-enable swap-swapfile.swap
+# The swap file behind zram (created at the first boot).
+enable xeeonos-swapfile.service
 # TRIM for the SSD, once a week (util-linux).
 enable fstrim.timer
 # Firmware metadata (fwupd), so that `fwupdmgr get-updates` knows what is new.

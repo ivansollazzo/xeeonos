@@ -188,7 +188,13 @@ fn perform(action: &str, yes: bool) -> Result<()> {
     match action {
         "reinstall" => reinstall(yes),
         "rollback" => {
-            boot::rollback(&[])?;
+            // The menu already asked which action; --yes skips the question.
+            let args = if yes {
+                vec!["--yes".to_string()]
+            } else {
+                Vec::new()
+            };
+            boot::rollback(&args)?;
             offer_reboot(yes)
         }
         "restore" => crate::snapshots::screen(),

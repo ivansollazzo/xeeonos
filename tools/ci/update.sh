@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# First boot, A/B update over HTTP, rollback, and the automatic fallback after
-# a broken update. These steps form one story on one disk: each step starts
+# First boot, A/B update over HTTP, rollback and installing the version left
+# again, and the automatic fallback after a broken update. These steps form one story on one disk: each step starts
 # from the disk the previous one left.
 source "$(dirname "$0")/common.sh"
 BROKEN=$VERSION.2   # a broken version after the next one
@@ -60,7 +60,7 @@ tools/boot-test.sh --http out/manifest-only "${keyring[@]}" --run "$check" \
 echo "::endgroup::"
 
 echo "::group::4. xctl rollback"
-tools/boot-test.sh --run "/usr/bin/xctl rollback" \
+tools/boot-test.sh --run "/usr/bin/xctl rollback --yes" \
     --expect "XeeonOS $NEXT is disabled. Restart to go back to XeeonOS $VERSION\." \
     out/disk.raw out/serial-4-rollback.log
 echo "::endgroup::"
@@ -71,7 +71,27 @@ tools/boot-test.sh \
     --expect "$VERSION +good, running" \
     --expect "$NEXT +bad" \
     --expect "check: sealed system OK" \
+    --expect "XeeonOS $NEXT is turned off here" \
     out/disk.raw out/serial-5-after-rollback.log
+echo "::endgroup::"
+
+# A version turned off (by a rollback, or after failing to start) is not
+# offered again by the daily check, but `xctl update` installs it again,
+# writing it from scratch (the copy on the disk may be damaged).
+echo "::group::5b. Turned off: not offered by the check, installed again by xctl update"
+tools/boot-test.sh --http build/update-next "${keyring[@]}" --run "$check" \
+    --expect "XeeonOS $NEXT is turned off on this computer" \
+    --expect "The copy of XeeonOS $NEXT on this computer was removed" \
+    --expect "XeeonOS $NEXT is installed" \
+    out/disk.raw out/serial-5b-reinstall.log
+echo "::endgroup::"
+
+echo "::group::5c. The version installed again boots"
+tools/boot-test.sh \
+    --expect "XeeonOS $NEXT \(build" \
+    --expect "$NEXT +good, running" \
+    --expect "check: sealed system OK" \
+    out/disk.raw out/serial-5c-after-reinstall.log
 echo "::endgroup::"
 
 # The next version under a newer number, with the start of its /usr
@@ -96,8 +116,8 @@ echo "::endgroup::"
 echo "::group::7. After 3 failed attempts, the previous version starts"
 TIMEOUT=900 tools/boot-test.sh --allow-reboot \
     --expect "XeeonOS: this version failed to start; restarting" \
-    --expect "XeeonOS $VERSION \(build" \
-    --expect "$VERSION +good, running" \
+    --expect "XeeonOS $NEXT \(build" \
+    --expect "$NEXT +good, running" \
     --expect "$BROKEN +bad" \
     --expect "check: sealed system OK" \
     out/disk.raw out/serial-7-fallback.log

@@ -37,6 +37,8 @@ mod config {
     pub const UPDATE_AVAILABLE: &str = "/var/lib/xeeonos/update-available";
     /// Disk problems found by the last `xctl health` (xeeonos-health.timer).
     pub const HEALTH: &str = "/var/lib/xeeonos/health";
+    /// Update settings written by the administrator (docs/updates.md).
+    pub const UPDATE_CONF: &str = "/etc/xeeonos/update.conf";
     /// The channel chosen by the administrator, if any.
     pub const CHANNEL_FILE: &str = "/etc/xeeonos/channel";
     pub const OS_RELEASE: &str = "/usr/lib/os-release";
@@ -66,7 +68,9 @@ Commands:
       --keyring <file>   Also accept updates signed by the keys in <file>.
       --check            Only say whether a newer version is available
                          (downloads only the small signed manifest; no root).
-  rollback               Go back to the previous version at the next restart.
+  rollback [--yes]       Go back to the previous version at the next restart
+                         (asks first; the version left is turned off until
+                         the next `xctl update`).
                          The running version is marked as bad and will not
                          be started (or installed) again.
   channel [<name>]       Show the update channel, or switch to <name>:

@@ -8,74 +8,20 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A new push to a pull request replaces its running checks.
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
-# The jobs form a chain: each one starts only if the previous one passed.
+#   xctl -> build -> test (one job per feature, in parallel) -> publish
 #
-#   xctl -> build -> disk tests -> ISO -> publish (channel branches only)
-#
-# Everything is built once, in `build`; the test jobs use what it built
-# (artifacts of this run, kept 3 days), so a failed test can be re-run on its
-# own in a few minutes. Every run builds from scratch: no packages or build
-# results are shared between runs or pull requests.
-#
-# Resuming: in a pull request, when the previous run did not pass, the test
-# blocks that passed in it (disk tests, ISO tests) are not run again: the new
-# run goes on from the block that failed. Once a run passes completely, the
-# next one tests everything again. (A block is the unit, because its tests
-# share one virtual disk and depend on each other.) Pushes to a channel
-# branch always run everything.
+# Every run builds and tests everything. Everything is built once, in
+# `build`; each test job starts from a clean copy of what it built (artifacts
+# of this run, kept 3 days), so the test jobs are independent: one failure
+# does not stop the others, and "Re-run failed jobs" repeats only the failed
+# ones, without building again. Downloaded packages are cached (see `build`).
+# The tests are in tools/ci/ (one script per job, see tools/ci/README.md).
 jobs:
-  resume:
-    name: Resume after a failed run
-    runs-on: ubuntu-24.04
-    permissions:
-      actions: read
-    outputs:
-      disk: ${{ steps.find.outputs.disk }}
-      iso: ${{ steps.find.outputs.iso }}
-    steps:
-      - name: Find the test blocks that passed in the previous run
-        id: find
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          BRANCH: ${{ github.head_ref }}
-        run: |
-          prev=$(gh run list --workflow build.yml --branch "$BRANCH" --event pull_request \
-            --limit 20 --json databaseId,conclusion \
-            --jq "[.[] | select(.databaseId != $GITHUB_RUN_ID)][0] // empty | \"\(.databaseId) \(.conclusion)\"")
-          if [[ -z $prev ]]; then
-            echo "No previous run: everything is tested." | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          read -r id conclusion <<< "$prev"
-          if [[ $conclusion == success ]]; then
-            echo "Previous run ($id) passed: everything is tested again." | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          gh run download "$id" --pattern 'passed-*' --dir passed || true
-          for block in disk iso; do
-            if [[ -e passed/passed-$block ]]; then
-              echo "$block=passed" >> "$GITHUB_OUTPUT"
-              echo "Not run again: $block tests (passed in run $id)." | tee -a "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-
-      # Passed blocks are carried over, so that a run after this one can also skip them.
-      - run: echo passed > passed
-      - name: Carry over the passed disk tests
-        if: steps.find.outputs.disk == 'passed'
-        uses: actions/upload-artifact@v4
-        with: {name: passed-disk, path: passed, retention-days: 3}
-      - name: Carry over the passed ISO tests
-        if: steps.find.outputs.iso == 'passed'
-        uses: actions/upload-artifact@v4
-        with: {name: passed-iso, path: passed, retention-days: 3}
-
   xctl:
     name: xctl (format, lint, unit tests)
     runs-on: ubuntu-24.04
@@ -83,7 +29,7 @@ jobs:
       run:
         working-directory: xctl
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: rustup update stable && rustup default stable
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
@@ -95,10 +41,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install mkosi
-        uses: systemd/mkosi@v27.1
+        uses: systemd/mkosi@ecf7f5702bb2052b7a69cab3fe7d37bc3b9ad77b # v27.1
 
       - name: Free disk space (three images are built)
         run: |
@@ -106,6 +52,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install --assume-yes --no-install-recommends zstd
           df -h /
+
+      # Downloaded packages are kept between runs. They come from the dated
+      # Arch snapshot in mkosi.conf, so the same snapshot always gives the
+      # same files: the cache saves the downloads, never changes the result.
+      # A new snapshot date starts a new cache.
+      - name: Find the Arch snapshot
+        run: echo "SNAPSHOT=$(sed -n 's/^Snapshot=//p' mkosi.conf | tr / -)" >> "$GITHUB_ENV"
+      - name: Package cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: mkosi.pkgcache
+          key: arch-packages-${{ env.SNAPSHOT }}-${{ hashFiles('mkosi.conf', 'mkosi.conf.d/**/*.conf', 'mkosi.profiles/**/*.conf', 'mkosi.initrd.conf/**/*.conf') }}
+          restore-keys: arch-packages-${{ env.SNAPSHOT }}-
 
       - name: Compute version
         run: |
@@ -117,7 +76,7 @@ jobs:
       # files (installed by the ISO, published on channel branches).
       - name: Build the system
         run: |
-          mkdir -p mkosi.cache out/disk-image
+          mkdir -p mkosi.cache mkosi.pkgcache out/disk-image
           mkosi --force --image-version="$VERSION" build
           ls -lhs mkosi.output/
           zstd -T0 --quiet "mkosi.output/xeeonos_$VERSION.raw" -o "out/disk-image/xeeonos_$VERSION.raw.zst"
@@ -139,7 +98,7 @@ jobs:
           ls -lhR out/
 
       - name: Upload the disk image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: disk-image
           path: out/disk-image/
@@ -147,7 +106,7 @@ jobs:
           compression-level: 0
 
       - name: Upload the system update files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: update-system
           path: out/update-system/
@@ -155,7 +114,7 @@ jobs:
           compression-level: 0
 
       - name: Upload the next version's update files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: update-next
           path: out/update-next/
@@ -163,288 +122,53 @@ jobs:
           compression-level: 0
 
       - name: Upload the live image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: live
           path: out/live/
           retention-days: 3
 
-  disk:
-    name: Test first boot, A/B update, rollback, setup and Recovery
-    needs: [resume, build]
-    if: needs.resume.outputs.disk != 'passed'
+  test:
+    name: Test ${{ matrix.test }}
+    needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {test: update, artifacts: '{disk-image,update-next}'}
+          - {test: setup, artifacts: disk-image}
+          - {test: recovery, artifacts: disk-image}
+          - {test: network, artifacts: disk-image}
+          - {test: iso-install, artifacts: '{live,update-system}'}
+          - {test: iso-alongside, artifacts: '{live,update-system}'}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Install VM tools
+      - name: Install VM and ISO tools
         run: |
           sudo apt-get update
-          sudo apt-get install --assume-yes --no-install-recommends qemu-system-x86 ovmf zstd
+          sudo apt-get install --assume-yes --no-install-recommends \
+            qemu-system-x86 ovmf zstd dosfstools mtools xorriso fdisk
 
       - name: Compute version
         run: |
           echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
           echo "NEXT=$(tools/version.sh).1" >> "$GITHUB_ENV"
-          # A broken version after the next one, to test the automatic fallback.
-          echo "BROKEN=$(tools/version.sh).2" >> "$GITHUB_ENV"
 
-      - name: Download the disk image and the next version
-        uses: actions/download-artifact@v4
+      - name: Download what the build made
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          pattern: '{disk-image,update-next}'
+          pattern: ${{ matrix.artifacts }}
           path: build
 
-      - name: Create a throwaway signing key, sign the next version
-        run: |
-          export GNUPGHOME=$RUNNER_TEMP/test-gnupg
-          mkdir -m 700 "$GNUPGHOME"
-          gpg --batch --passphrase '' --quick-gen-key "XeeonOS CI test key" ed25519 sign 1d
-          gpg --export > "$RUNNER_TEMP/test-keyring.gpg"
-          gpg --batch --yes --local-user "XeeonOS CI test key" --detach-sign \
-            --output build/update-next/SHA256SUMS.gpg build/update-next/SHA256SUMS
-
-      - name: "Test 1: first boot, sealed /usr"
-        run: |
-          mkdir -p out
-          zstd -d --sparse --quiet "build/disk-image/xeeonos_$VERSION.raw.zst" -o out/disk.raw
-          rm -rf build/disk-image
-          tools/boot-test.sh out/disk.raw out/serial-1-firstboot.log
-
-      - name: "Test 2: update to the next version over HTTP"
-        # systemd.run= replaces the boot target, so the normal services
-        # (network included) are not started: start the network first.
-        run: |
-          tools/boot-test.sh \
-            --http build/update-next \
-            --credential "xctl.keyring=$RUNNER_TEMP/test-keyring.gpg" \
-            --run "/bin/sh -c 'systemctl start network-online.target && /usr/bin/xctl update --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring'" \
-            --expect "XeeonOS $NEXT is installed" \
-            out/disk.raw out/serial-2-update.log
-
-      - name: "Test 3: the next version boots from slot B"
-        run: |
-          tools/boot-test.sh \
-            --expect "XeeonOS $NEXT \(build" \
-            --expect "xeeonos_$NEXT  \(running\)" \
-            --expect "xeeonos_${VERSION}[[:space:]]*\$" \
-            --expect "$NEXT +good, running" \
-            --expect "check: sealed system OK" \
-            out/disk.raw out/serial-3-after-update.log
-
-      - name: "Test 4: xctl rollback"
-        run: |
-          tools/boot-test.sh \
-            --run "/usr/bin/xctl rollback" \
-            --expect "XeeonOS $NEXT is disabled. Restart to go back to XeeonOS $VERSION\." \
-            out/disk.raw out/serial-4-rollback.log
-
-      - name: "Test 5: the previous version boots again"
-        run: |
-          tools/boot-test.sh \
-            --expect "XeeonOS $VERSION \(build" \
-            --expect "$VERSION +good, running" \
-            --expect "$NEXT +bad" \
-            --expect "check: sealed system OK" \
-            out/disk.raw out/serial-5-after-rollback.log
-
-      - name: "Test 6: install a broken version"
-        # The next version under a newer number, with the start of its /usr
-        # overwritten: it installs fine (the files match the signed manifest)
-        # but cannot start, because dm-verity refuses the damaged blocks.
-        run: |
-          src=out/broken-src
-          mkdir -p "$src"
-          cp "build/update-next/xeeonos_$NEXT.efi" "$src/xeeonos_$BROKEN.efi"
-          for f in build/update-next/xeeonos_"$NEXT".usr-*.raw.zst; do
-            name=$(basename "$f" .zst)
-            zstd -d --sparse --quiet "$f" -o "$src/xeeonos_$BROKEN${name#xeeonos_$NEXT}"
-          done
-          dd if=/dev/urandom of="$(echo "$src"/xeeonos_"$BROKEN".usr-x86-64.*.raw)" \
-            bs=1M count=1 conv=notrunc
-          GNUPGHOME=$RUNNER_TEMP/test-gnupg SIGNING_KEY="XeeonOS CI test key" \
-            tools/mkupdate.sh "$src" "$BROKEN" out/update-broken
-          rm -rf "$src"
-          tools/boot-test.sh \
-            --http out/update-broken \
-            --credential "xctl.keyring=$RUNNER_TEMP/test-keyring.gpg" \
-            --run "/bin/sh -c 'systemctl start network-online.target && /usr/bin/xctl update --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring'" \
-            --expect "XeeonOS $BROKEN is installed" \
-            out/disk.raw out/serial-6-update-broken.log
-
-      - name: "Test 7: after 3 failed attempts, the previous version starts"
-        run: |
-          TIMEOUT=900 tools/boot-test.sh --allow-reboot \
-            --expect "XeeonOS: this version failed to start; restarting" \
-            --expect "XeeonOS $VERSION \(build" \
-            --expect "$VERSION +good, running" \
-            --expect "$BROKEN +bad" \
-            --expect "check: sealed system OK" \
-            out/disk.raw out/serial-7-fallback.log
-
-      - name: "Test 8: first-boot setup (unattended), no Arch tools"
-        run: |
-          printf '%s\n' language=it_IT.UTF-8 hostname=xeeonos-ci user=test \
-            "fullname=Test User" password=test-password admin=yes > out/setup.txt
-          tools/boot-test.sh \
-            --setup out/setup.txt \
-            --run "/bin/sh -c 'id -nG test; cat /etc/locale.conf /etc/vconsole.conf; test -e /usr/bin/pacman || echo NO-PACMAN; test -e /etc/arch-release || test -e /usr/share/factory/etc/arch-release || echo NO-ARCH-RELEASE; locale -a | grep -q de_DE.utf8 && echo HAS-GERMAN; xctl packages systemd-libs; xctl install-system --disk /dev/vda --yes; xctl status --check'" \
-            --expect "XeeonOS setup: created user test \(administrator\)" \
-            --expect "test wheel" \
-            --expect "LANG=it_IT.UTF-8" \
-            --expect "KEYMAP=it" \
-            --expect "NO-PACMAN" \
-            --expect "NO-ARCH-RELEASE" \
-            --expect "HAS-GERMAN" \
-            --expect "systemd-libs [0-9]" \
-            --expect "already installed and running here" \
-            --expect "Based on: +Arch Linux \(snapshot " \
-            --expect "check: sealed system OK" \
-            out/disk.raw out/serial-8-setup.log
-
-      - name: "Test 9: Recovery: restart into it, then erase everything"
-        # Three boots sharing the UEFI variables: the running system asks for
-        # Recovery at the next boot only (one-shot boot menu choice); in
-        # Recovery, "erase" asks for a factory reset; at the boot after that
-        # the data partition is new: the user created by the setup is gone.
-        # (While the test command runs, xeeonos-recovery.target is still being
-        # started: it waits for the units it pulls in, the command included. So
-        # the test looks for its start job, not for "active".)
-        # (The commands write "xeeonos[.]recovery": the command itself is on
-        # the kernel command line, and must not contain the Recovery word.)
-        run: |
-          tools/boot-test.sh --efivars out/vars-9.fd \
-            --run "/bin/sh -c 'grep -qw xeeonos[.]recovery /proc/cmdline && echo WRONG-BOOT; xctl recovery --yes'" \
-            --expect "Restarting into Recovery \(xeeonos_${VERSION}\.efi@recovery\)" \
-            out/disk.raw out/serial-9a-to-recovery.log
-          tools/boot-test.sh --efivars out/vars-9.fd \
-            --run "/bin/sh -c 'grep -qw xeeonos[.]recovery /proc/cmdline && echo IN-RECOVERY; systemctl list-jobs --no-legend | grep xeeonos-recovery.target | sed s,^,TARGET-JOB-,; command -v nmtui && echo HAS-NMTUI; xctl recovery erase --yes'" \
-            --expect "IN-RECOVERY" \
-            --expect "TARGET-JOB-.*xeeonos-recovery.target +start" \
-            --expect "HAS-NMTUI" \
-            --expect "All data will be erased at the restart" \
-            out/disk.raw out/serial-9b-recovery.log
-          tools/boot-test.sh --efivars out/vars-9.fd \
-            --run "/bin/sh -c 'grep -qw xeeonos[.]recovery /proc/cmdline && echo WRONG-BOOT; id test || echo USER-GONE; xctl recovery < /dev/null; xctl status --check'" \
-            --expect "USER-GONE" \
-            --expect "Restart into Recovery now" \
-            --expect "check: sealed system OK" \
-            out/disk.raw out/serial-9c-erased.log
-          ! grep -q WRONG-BOOT out/serial-9a-to-recovery.log out/serial-9c-erased.log
-
-      - name: "Test 10: network settings, manual address then DHCP"
-        # (NetworkManager is started by hand: systemd.run= replaces the boot target.)
-        run: |
-          tools/boot-test.sh \
-            --run "/bin/sh -c 'systemctl start NetworkManager.service && nm-online -s -q -t 60; xctl network ethernet --address 10.0.2.50/24 --gateway 10.0.2.2 --dns 10.0.2.3 && xctl network status | sed s,^,MANUAL-,; xctl network ethernet --dhcp && xctl network status | sed s,^,DHCP-,'" \
-            --expect "MANUAL-Wired .*10\.0\.2\.50/24" \
-            --expect "DHCP-Wired .*10\.0\.2\.15/24" \
-            out/disk.raw out/serial-10-network.log
-
-      - name: Remember that these tests passed
-        run: echo passed > passed
-      - uses: actions/upload-artifact@v4
-        with: {name: passed-disk, path: passed, retention-days: 3}
-
-      - name: Upload boot logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: serial-logs-disk
-          path: out/serial-*.log
-          if-no-files-found: ignore
-
-  iso:
-    name: Pack live ISO, test boot and installation
-    needs: [resume, build, disk]
-    if: >-
-      !cancelled() && needs.build.result == 'success' &&
-      (needs.disk.result == 'success' || needs.resume.outputs.disk == 'passed') &&
-      needs.resume.outputs.iso != 'passed'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install ISO and VM tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install --assume-yes --no-install-recommends \
-            dosfstools mtools xorriso qemu-system-x86 ovmf zstd fdisk
-
-      - name: Compute version
-        run: echo "VERSION=$(tools/version.sh)" >> "$GITHUB_ENV"
-
-      - name: Download the live image and the system to install
-        uses: actions/download-artifact@v4
-        with:
-          pattern: '{live,update-system}'
-          path: build
-
-      # The ISO carries the system to install: the same files as an update.
-      - name: Pack ISO
-        run: |
-          mkdir -p out
-          tools/mkiso.sh "build/live/xeeonos_$VERSION.efi" "out/xeeonos-$VERSION.iso" build/update-system
-          ls -lh out/
-
-      - name: "Test 1: the live system boots"
-        run: tools/boot-test.sh "out/xeeonos-$VERSION.iso" out/serial-live.log
-
-      - name: "Test 2: install on a blank disk"
-        run: |
-          tools/boot-test.sh \
-            --disk out/target.raw \
-            --run "/bin/sh -c 'test -e /etc/arch-release || echo LIVE-NO-ARCH-RELEASE; /usr/bin/xctl install-system --disk /dev/vda --yes && exit 0; echo DIAG; ls -l /dev/disk/by-label; lsblk; ls /usr/lib/modules/*/kernel/drivers | head; journalctl -k -b --no-pager | grep -i -e sr0 -e sr_mod -e initramfs -e ahci -e ata; exit 1'" \
-            --expect "LIVE-NO-ARCH-RELEASE" \
-            --expect "XeeonOS $VERSION is installed on /dev/vda" \
-            "out/xeeonos-$VERSION.iso" out/serial-install.log
-
-      - name: "Test 3: the installed system boots"
-        run: |
-          tools/boot-test.sh \
-            --expect "XeeonOS $VERSION \(build" \
-            --expect "check: sealed system OK" \
-            out/target.raw out/serial-installed.log
-          rm out/target.raw
-
-      # A disk with "another system": a small EFI System Partition (100 MiB,
-      # too small for the kernels) and a data partition with a marker, then
-      # free space. XeeonOS goes into the free space with its own boot
-      # partition (XBOOTLDR); the other partitions must stay as they were.
-      - name: "Test 4: install next to another system"
-        env:
-          DISK_SIZE: 30G
-        run: |
-          truncate --size=30G out/other.raw
-          printf 'label: gpt\nstart=1MiB, size=100MiB, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B\nsize=2GiB, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\n' \
-            | sfdisk --quiet out/other.raw
-          truncate --size=100M out/esp.img && mkfs.vfat -F 32 out/esp.img
-          dd if=out/esp.img of=out/other.raw bs=1M seek=1 conv=notrunc status=none
-          printf 'OTHER-SYSTEM-MARKER' | dd of=out/other.raw bs=1M seek=101 conv=notrunc status=none
-          rm out/esp.img
-          tools/boot-test.sh \
-            --disk out/other.raw \
-            --run "/bin/sh -c '/usr/bin/xctl install-system --disk /dev/vda --free-space --yes || { echo DIAG; systemd-repart --version; sfdisk -d /dev/vda; SYSTEMD_LOG_LEVEL=debug /usr/bin/xctl install-system --disk /dev/vda --free-space --yes; }; lsblk -o NAME,SIZE,PARTTYPENAME,LABEL /dev/vda'" \
-            --expect "XeeonOS $VERSION is installed on /dev/vda" \
-            "out/xeeonos-$VERSION.iso" out/serial-install-free.log
-          tools/boot-test.sh \
-            --run "/bin/sh -c 'bootctl --print-boot-path | sed s,^,BOOT-PATH-,; head -c 19 /dev/vda2; echo; lsblk -o NAME,SIZE,PARTTYPENAME,LABEL /dev/vda; xctl status --check'" \
-            --expect "BOOT-PATH-/boot" \
-            --expect "OTHER-SYSTEM-MARKER" \
-            --expect "check: sealed system OK" \
-            out/other.raw out/serial-installed-free.log
-          rm out/other.raw
-
-      - name: Remember that these tests passed
-        run: echo passed > passed
-      - uses: actions/upload-artifact@v4
-        with: {name: passed-iso, path: passed, retention-days: 3}
+      - name: Run tools/ci/${{ matrix.test }}.sh
+        run: tools/ci/${{ matrix.test }}.sh
 
       - name: Upload ISO
-        if: success()
-        uses: actions/upload-artifact@v4
+        if: success() && matrix.test == 'iso-install'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: xeeonos-iso
           path: out/*.iso
@@ -453,9 +177,9 @@ jobs:
 
       - name: Upload boot logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: serial-logs-live
+          name: serial-logs-${{ matrix.test }}
           path: out/serial-*.log
           if-no-files-found: ignore
 
@@ -464,14 +188,14 @@ jobs:
   # (XEEONOS_SIGNING_KEY, an armored GnuPG secret key without passphrase).
   publish:
     name: Publish update to ghcr.io
-    needs: iso
+    needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Compute version
         run: |
@@ -479,7 +203,7 @@ jobs:
           echo "CHANNEL=$(tools/version.sh --channel)" >> "$GITHUB_ENV"
 
       - name: Download the system update files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: update-system
           path: out/update

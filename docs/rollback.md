@@ -44,7 +44,7 @@ with attempts left, bad) and which one is running.
 
 ## Tests
 
-CI (`.github/workflows/build.yml`, disk job), after the update test:
+CI (`tools/ci/update.sh`), after the update test, on the same disk:
 
 1. `xctl rollback` on N+1, restart: N runs, N+1 is shown as bad.
 2. Update to a broken N+2 (the start of its `/usr` overwritten, so dm-verity

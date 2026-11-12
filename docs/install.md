@@ -70,9 +70,9 @@ confirmation, for automated tests.
 
 ## Tests
 
-CI (`iso` job) boots the ISO with a blank 24 GiB disk, runs
+CI (`tools/ci/iso-install.sh`) boots the ISO with a blank 24 GiB disk, runs
 `xctl install-system --disk /dev/vda --yes`, then boots that disk and checks
-that the system is sealed. Then it does the same on a disk with "another
+that the system is sealed. `tools/ci/iso-alongside.sh` does the same on a disk with "another
 system" (a 100 MiB EFI System Partition and a data partition with a marker)
 using `--free-space`: the installed system must start from its own boot
 partition, and the other partition must be unchanged.

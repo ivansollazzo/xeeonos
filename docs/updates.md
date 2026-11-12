@@ -35,7 +35,6 @@ xctl update --from /run/media/usb/update        # from a directory
 xctl update --from http://server/xeeonos/       # from a web directory
 xctl channel                     # show the channel
 sudo xctl channel 1.1-beta       # switch channel (stored in /etc/xeeonos/channel)
-sudo xctl channel maverick       # a code name: its stable channel (1.0-stable)
 ```
 
 `xctl update` downloads only the signed manifest first (a few hundred bytes)
@@ -72,10 +71,6 @@ offers nothing until it passes it.
 
 `mkosi.version` holds the base version, and on a release branch it must
 belong to it (`1.0.x` on `1.0-*`; `tools/version.sh` checks).
-
-Code names (file `codenames`: `1.0 maverick`) are for people: they appear
-in `xctl status` and in the boot menu, and `xctl channel <code name>` means
-that version's stable channel.
 
 ## Signing key
 

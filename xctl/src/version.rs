@@ -79,19 +79,6 @@ fn is_number(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
 }
 
-/// The code names of the minor versions (file `codenames` in the
-/// repository, /usr/share/xeeonos/codenames on the system): `1.0 maverick`.
-/// The stable channel of the version a code name stands for, if known.
-pub fn channel_of_codename(list: &str, name: &str) -> Option<String> {
-    list.lines()
-        .map(str::trim)
-        .filter(|l| !l.starts_with('#'))
-        .filter_map(|l| l.split_once(char::is_whitespace))
-        .find(|(_, n)| n.trim() == name)
-        .map(|(minor, _)| format!("{minor}-stable"))
-        .filter(|c| is_valid_channel(c))
-}
-
 /// Compare two versions the way people expect: numbers by value, so that
 /// `0.1.0-experimental.12` is newer than `0.1.0-experimental.9`.
 ///
@@ -171,21 +158,6 @@ mod tests {
         ] {
             assert!(!is_valid_channel(bad), "{bad}");
         }
-    }
-
-    #[test]
-    fn codenames() {
-        let list = "# comment\n# 0.9 old\n1.0 maverick\n1.1  dodo\n";
-        assert_eq!(
-            channel_of_codename(list, "maverick").as_deref(),
-            Some("1.0-stable")
-        );
-        assert_eq!(
-            channel_of_codename(list, "dodo").as_deref(),
-            Some("1.1-stable")
-        );
-        assert_eq!(channel_of_codename(list, "old"), None);
-        assert_eq!(channel_of_codename(list, "nope"), None);
     }
 
     #[test]

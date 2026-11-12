@@ -1,8 +1,0 @@
-# The code name of each minor version of XeeonOS, for people: shown in
-# `xctl status`, in the boot menu (os-release VERSION_CODENAME, PRETTY_NAME),
-# and usable as a channel name: `xctl channel <name>` means <version>-stable.
-# Branches, channels and versions stay numeric (docs/updates.md).
-#
-# <major.minor> <name>     (lowercase letters only), e.g.:
-# 1.0 maverick
-# 1.1 dodo

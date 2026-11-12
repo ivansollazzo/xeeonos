@@ -76,8 +76,7 @@ Commands:
                          be started (or installed) again.
   channel [<name>]       Show the update channel, or switch to <name>:
                          experimental, or <major>.<minor>-alpha|beta|stable
-                         (e.g. 1.0-stable, 1.1-beta), or the code name of a
-                         version (its stable channel).
+                         (e.g. 1.0-stable, 1.1-beta).
       --reset            Go back to the channel this version was built for.
   packages [<name>]      List the packages of this version (and their
                          versions); with <name>, only those containing it.

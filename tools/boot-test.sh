@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Boot a XeeonOS image in QEMU (UEFI, no Secure Boot) and check that it works.
+# Boot a XeeonOS image in QEMU (UEFI) and check that it works.
 #
 #   *.iso  live ISO: pass when systemd reaches multi-user.target, or, with
 #          --run, run a command after boot and power off.
@@ -31,6 +31,12 @@
 #                           (one-shot boot menu choice, factory reset request)
 #   --allow-reboot          let the VM restart (to test the fallback after
 #                           failed boots); by default a restart ends the test
+#   --secure-boot           firmware with Secure Boot (OVMF_CODE_4M.secboot);
+#                           new UEFI variables start in Setup Mode, without
+#                           keys, so systemd-boot enrolls the XeeonOS keys
+#                           (and restarts: use --allow-reboot)
+#   --tpm <dir>             a TPM 2.0 chip (swtpm), whose state is kept in
+#                           <dir> (created if missing) for the next boots
 # Env: TIMEOUT (seconds, default 300), MEMORY (MiB, default 6144),
 #      DISK_SIZE (default 24G), OVMF_CODE / OVMF_VARS (Ubuntu defaults).
 set -euo pipefail
@@ -43,6 +49,8 @@ expect=()
 credentials=()
 http_dir=""
 efivars=""
+secure_boot=no
+tpm_dir=""
 no_reboot=(-no-reboot)
 while (( $# )); do
     case $1 in
@@ -55,6 +63,8 @@ while (( $# )); do
         --cmdline) extra_cmdline=$2; shift 2 ;;
         --efivars) efivars=$2; shift 2 ;;
         --allow-reboot) no_reboot=(); shift ;;
+        --secure-boot) secure_boot=yes; shift ;;
+        --tpm) tpm_dir=$2; shift 2 ;;
         -*) echo "unknown option: $1" >&2; exit 2 ;;
         *) break ;;
     esac
@@ -66,6 +76,12 @@ timeout=${TIMEOUT:-300}
 memory=${MEMORY:-6144}
 ovmf_code=${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}
 ovmf_vars=${OVMF_VARS:-/usr/share/OVMF/OVMF_VARS_4M.fd}
+machine=()
+if [[ $secure_boot == yes ]]; then
+    # The Secure Boot firmware needs SMM and protected variable storage.
+    ovmf_code=${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.secboot.fd}
+    machine=(-global driver=cfi.pflash01,property=secure,value=on)
+fi
 
 work=$(mktemp -d)
 if [[ -n $efivars ]]; then
@@ -140,6 +156,18 @@ if [[ -n $disk ]]; then
 fi
 
 pids=()
+if [[ -n $tpm_dir ]]; then
+    mkdir -p "$tpm_dir"
+    swtpm socket --tpm2 --tpmstate dir="$tpm_dir" \
+        --ctrl type=unixio,path="$work/swtpm.sock" --terminate &
+    pids+=($!)
+    for (( i = 0; i < 50; i++ )); do
+        [[ -S $work/swtpm.sock ]] && break
+        sleep 0.1
+    done
+    media+=(-chardev "socket,id=chrtpm,path=$work/swtpm.sock"
+            -tpmdev emulator,id=tpm0,chardev=chrtpm -device tpm-tis,tpmdev=tpm0)
+fi
 if [[ -n $http_dir ]]; then
     python3 -m http.server --directory "$http_dir" --bind 127.0.0.1 8080 >"$work/http.log" 2>&1 &
     pids+=($!)
@@ -147,8 +175,10 @@ fi
 
 echo "Booting $image (accel=$accel, ${memory} MiB, timeout ${timeout}s)"
 # QEMU's user-mode network makes the host reachable as 10.0.2.2.
+smm=""
+[[ $secure_boot == no ]] || smm=",smm=on"
 qemu-system-x86_64 \
-    -machine q35,accel="$accel" -cpu max -smp 2 -m "$memory" \
+    -machine q35,accel="$accel$smm" "${machine[@]}" -cpu max -smp 2 -m "$memory" \
     -drive if=pflash,format=raw,readonly=on,file="$ovmf_code" \
     -drive if=pflash,format=raw,file="$vars" \
     -nic user,model=virtio-net-pci \

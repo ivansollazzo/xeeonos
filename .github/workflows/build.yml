@@ -99,7 +99,7 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           sudo apt-get update
-          sudo apt-get install --assume-yes --no-install-recommends zstd
+          sudo apt-get install --assume-yes --no-install-recommends zstd sbsigntool
           df -h /
 
       # Downloaded packages are kept between runs. They come from the dated
@@ -124,13 +124,28 @@ jobs:
           # The "next" version, built only to test updating to it.
           echo "NEXT=$(tools/version.sh).1" >> "$GITHUB_ENV"
 
+      # UEFI Secure Boot (docs/secure-boot.md): pull requests are signed with
+      # a throwaway key made for this run; channel builds with the XeeonOS
+      # key (secret XEEONOS_SECUREBOOT_KEY, never given to pull requests).
+      - name: Secure Boot signing key
+        if: env.REUSE != 'yes'
+        env:
+          XEEONOS_SECUREBOOT_KEY: ${{ github.event_name != 'pull_request' && secrets.XEEONOS_SECUREBOOT_KEY || '' }}
+        run: |
+          if [[ $GITHUB_EVENT_NAME == pull_request ]]; then
+            tools/secureboot.sh --test "$RUNNER_TEMP/secureboot"
+          else
+            tools/secureboot.sh "$RUNNER_TEMP/secureboot"
+          fi
+          echo "SECUREBOOT=$(tr '\n' ' ' < "$RUNNER_TEMP/secureboot/mkosi-args")" >> "$GITHUB_ENV"
+
       # The system: the full disk image (first-boot tests) and its update
       # files (installed by the ISO, published on channel branches).
       - name: Build the system
         if: env.REUSE != 'yes'
         run: |
           mkdir -p mkosi.cache mkosi.pkgcache out/disk-image
-          mkosi --force --image-version="$VERSION" build
+          mkosi $SECUREBOOT --force --image-version="$VERSION" build
           ls -lhs mkosi.output/
           zstd -T0 --quiet "mkosi.output/xeeonos_$VERSION.raw" -o "out/disk-image/xeeonos_$VERSION.raw.zst"
           tools/mkupdate.sh mkosi.output "$VERSION" out/update-system
@@ -139,14 +154,14 @@ jobs:
       - name: Build the next version (for the update test)
         if: env.REUSE != 'yes'
         run: |
-          mkosi --force --image-version="$NEXT" build
+          mkosi $SECUREBOOT --force --image-version="$NEXT" build
           tools/mkupdate.sh mkosi.output "$NEXT" out/update-next
           rm -rf mkosi.output
 
       - name: Build the live image (UKI)
         if: env.REUSE != 'yes'
         run: |
-          mkosi --force --profile=live --image-version="$VERSION" build
+          mkosi $SECUREBOOT --force --profile=live --image-version="$VERSION" build
           mkdir -p out/live
           mv "mkosi.output/xeeonos_$VERSION.efi" out/live/
           rm -rf mkosi.output
@@ -214,6 +229,7 @@ jobs:
           - {test: base, artifacts: disk-image}
           - {test: snapshots, artifacts: disk-image}
           - {test: hibernate, artifacts: disk-image}
+          - {test: secureboot, artifacts: '{disk-image,update-next}'}
           - {test: iso-install, artifacts: '{live,update-system}'}
           - {test: iso-alongside, artifacts: '{live,update-system}'}
     steps:
@@ -223,7 +239,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --assume-yes --no-install-recommends \
-            qemu-system-x86 ovmf zstd dosfstools mtools xorriso fdisk
+            qemu-system-x86 ovmf swtpm zstd dosfstools mtools xorriso fdisk
 
       # The version of the images (they may come from an earlier run).
       - name: Version under test

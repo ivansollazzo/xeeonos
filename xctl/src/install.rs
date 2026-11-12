@@ -260,6 +260,13 @@ pub fn run_install(args: &[String]) -> Result<()> {
     };
     let kernels = boot_dir.as_ref().map(Mounted::path);
     install_boot(esp_dir.path(), kernels, &payload)?;
+    {
+        let usr = Mounted::read_only(
+            &by_partuuid(&payload.usr_uuid).to_string_lossy(),
+            "xctl-install-usr",
+        )?;
+        install_secure_boot(esp_dir.path(), usr.path())?;
+    }
     if encrypt {
         // The first-boot setup asks for the disk password (the data
         // partition does not exist yet: it is created at the first start).
@@ -496,6 +503,42 @@ fn install_boot(esp: &Path, boot: Option<&Path>, p: &Payload) -> Result<()> {
     fs::create_dir_all(&linux)?;
     fs::copy(&p.uki, linux.join(format!("xeeonos_{}.efi", p.version)))?;
     fs::File::open(&linux)?.sync_all()?;
+    Ok(())
+}
+
+/// Secure Boot (docs/secure-boot.md). A signed version carries, in its
+/// /usr (`usr`, mounted), systemd-boot signed with the same key and the keys
+/// to enroll. Put them on the boot partition: the signed systemd-boot in
+/// place of the copies bootctl installed, and the keys in loader/keys/auto,
+/// where systemd-boot finds them when the firmware is in Setup Mode.
+/// (An unsigned version has neither: nothing changes.)
+fn install_secure_boot(esp: &Path, usr: &Path) -> Result<()> {
+    let signed = usr.join("lib/systemd/boot/efi/systemd-bootx64.efi.signed");
+    let keys = usr.join("share/xeeonos/secureboot");
+    if !signed.exists() || !keys.join("db.auth").exists() {
+        return Ok(());
+    }
+    let signed_data = fs::read(&signed)?;
+    // What bootctl copied: this system's systemd-boot, signed or not.
+    let local = Path::new("/usr/lib/systemd/boot/efi/systemd-bootx64.efi");
+    let installed: Vec<Vec<u8>> = [local.to_path_buf(), local.with_extension("efi.signed")]
+        .iter()
+        .filter_map(|p| fs::read(p).ok())
+        .collect();
+    for dest in ["EFI/systemd/systemd-bootx64.efi", "EFI/BOOT/BOOTX64.EFI"] {
+        let dest = esp.join(dest);
+        // Only systemd-boot is replaced (the fallback path may hold another
+        // system's boot loader).
+        if fs::read(&dest).is_ok_and(|d| installed.contains(&d)) {
+            fs::write(&dest, &signed_data)?;
+        }
+    }
+    let auto = esp.join("loader/keys/auto");
+    fs::create_dir_all(&auto)?;
+    for name in ["PK.auth", "KEK.auth", "db.auth"] {
+        fs::copy(keys.join(name), auto.join(name))?;
+    }
+    fs::File::open(&auto)?.sync_all()?;
     Ok(())
 }
 
@@ -876,6 +919,13 @@ impl Mounted {
     fn new(device: &str, name: &str) -> Result<Mounted> {
         let dir = TempDir::new(name)?;
         run("mount", &[device, &dir.0.to_string_lossy()])?;
+        Ok(Mounted(dir))
+    }
+
+    /// Read-only (e.g. the /usr partition just written, before verity).
+    fn read_only(device: &str, name: &str) -> Result<Mounted> {
+        let dir = TempDir::new(name)?;
+        run("mount", &["-o", "ro", device, &dir.0.to_string_lossy()])?;
         Ok(Mounted(dir))
     }
 

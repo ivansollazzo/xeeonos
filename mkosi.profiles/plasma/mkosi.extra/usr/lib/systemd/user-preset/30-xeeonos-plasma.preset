@@ -1,0 +1,4 @@
+# Sound for every user session (PipeWire).
+enable pipewire.socket
+enable pipewire-pulse.socket
+enable wireplumber.service

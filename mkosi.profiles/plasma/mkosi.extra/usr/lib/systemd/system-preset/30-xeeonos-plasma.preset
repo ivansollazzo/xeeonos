@@ -1,0 +1,5 @@
+# Services of the Plasma desktop, enabled by default.
+# The login screen (display-manager.service): after the first-boot setup.
+enable sddm.service
+enable bluetooth.service
+enable power-profiles-daemon.service

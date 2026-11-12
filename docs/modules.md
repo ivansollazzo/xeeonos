@@ -22,6 +22,7 @@ snapshot, output, tools tree) stay in the top-level `mkosi.conf`.
 | `system` | core | Sealed disk: ESP, A/B `/usr` slots (erofs + dm-verity), Btrfs data partition, hermetic `/etc`, sysupdate definitions, boot health check, first-boot setup, Recovery boot entry |
 | `xctl` | core | The `xctl` system tool (Rust, source in `xctl/`): status, update, rollback, channel, packages, setup, install-system |
 | `live` | optional | Live ISO: UKI running from RAM, root autologin, installer tools; replaces `system` |
+| `plasma` | optional | KDE Plasma desktop, minimal: Wayland session, SDDM login screen, network/sound/Bluetooth/power settings, Konsole, Dolphin, Spectacle (see [desktop.md](desktop.md)) |
 
 The initrd built into every kernel image is configured in the top-level
 `mkosi.initrd.conf/` (mkosi only reads it there): it restarts instead of
@@ -36,7 +37,8 @@ A variant is a set of optional modules on top of the core ones:
 | --- | --- |
 | Core (no desktop), installed system | `mkosi build` |
 | Live ISO | `mkosi --profile=live build` |
-| Desktop (planned) | `mkosi --profile=plasma,flatpak,xapp build` |
+| Desktop: what CI builds and publishes | `mkosi --profile=plasma build` |
+| Desktop, later | `mkosi --profile=plasma,flatpak,xapp build` |
 
 ## Runtime modules
 

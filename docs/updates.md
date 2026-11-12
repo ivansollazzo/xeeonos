@@ -34,7 +34,9 @@ sudo xctl update                 # install the newest version of the channel
 xctl update --from /run/media/usb/update        # from a directory
 xctl update --from http://server/xeeonos/       # from a web directory
 xctl channel                     # show the channel
-sudo xctl channel 1.1-beta       # switch channel (stored in /etc/xeeonos/channel)
+xctl channel list                # the channels published on the registry
+sudo xctl channel set 1.1-beta   # switch channel (stored in /etc/xeeonos/channel)
+sudo xctl channel reset          # back to the channel of the running version
 ```
 
 `xctl update` downloads only the signed manifest first (a few hundred bytes)
@@ -65,9 +67,26 @@ channel`, registry tag):
 
 Each minor version has its own branches, so the stable version and the one
 in development stay apart. A system on `1.0-stable` gets only the fixes of
-1.0; moving to 1.1 is a choice (`sudo xctl channel 1.1-stable`). Updates
-only go forward: a channel whose versions are older than the running one
-offers nothing until it passes it.
+1.0; moving to 1.1 is a choice (`sudo xctl channel set 1.1-stable`).
+Updates only go forward: a channel whose versions are older than the
+running one offers nothing until it passes it.
+
+To always have the newest version instead, choose a channel that follows
+it:
+
+| Channel | Follows |
+|---|---|
+| `stable` | the newest stable version |
+| `beta` | the newest beta, or a newer stable version |
+| `alpha` | the newest alpha, or a newer beta or stable version |
+
+At each update, xctl reads the list of channels on the registry (its tags)
+and takes the highest minor version with a stage the channel accepts; inside
+one minor version, the channel with the newest version (`1.1.0` is newer than
+`1.1.0-beta.9`). So a fix published on `1.1-beta` does not move `beta` back
+once `2.0-beta` exists. Nothing in CI moves these channels: they are worked
+out on each computer, and every update is still checked against the signing
+key. `xctl channel list` shows where each one is now.
 
 `mkosi.version` holds the base version, and on a release branch it must
 belong to it (`1.0.x` on `1.0-*`; `tools/version.sh` checks).

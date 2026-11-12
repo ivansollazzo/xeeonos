@@ -74,10 +74,14 @@ Commands:
                          the next `xctl update`).
                          The running version is marked as bad and will not
                          be started (or installed) again.
-  channel [<name>]       Show the update channel, or switch to <name>:
-                         experimental, or <major>.<minor>-alpha|beta|stable
-                         (e.g. 1.0-stable, 1.1-beta).
-      --reset            Go back to the channel this version was built for.
+  channel                Show the update channel.
+  channel list           List the channels published (needs the network):
+                         experimental, one per minor version and stage
+                         (e.g. 1.0-stable, 1.1-beta, 2.0-alpha), and
+                         stable, beta, alpha, which follow the newest
+                         version.
+  channel set <name>     Switch to the channel <name> (only one that exists).
+  channel reset          Go back to the channel this version was built for.
   packages [<name>]      List the packages of this version (and their
                          versions); with <name>, only those containing it.
   setup                  First-boot setup: language, keyboard, time zone,

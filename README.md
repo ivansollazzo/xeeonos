@@ -18,6 +18,9 @@ The channel is the branch name:
 | `experimental` | Free experimentation, continuous builds | `0.1.0-experimental.42` |
 | `<major>.<minor>-alpha`, `-beta`, `-stable` (later), e.g. `1.0-stable`, `1.1-beta` | Releases, one set of branches per minor version | `1.1.0-beta.57`, `1.0.0` |
 
+On top of these, the channels `stable`, `beta` and `alpha` follow the newest
+version (`xctl channel list`, see [docs/updates.md](docs/updates.md)).
+
 Changes enter a branch only through a pull request with green CI; work branches
 are deleted after merge. CI builds everything once, then runs one test job per
 feature in parallel ([tools/ci/](tools/ci/README.md)). The base version lives in `mkosi.version`;

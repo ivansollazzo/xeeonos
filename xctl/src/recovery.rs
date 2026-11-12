@@ -85,17 +85,20 @@ fn restart_into_recovery(yes: bool) -> Result<()> {
         return Ok(());
     }
     let list = output("bootctl", &["list", "--json=short"])?;
-    let id = recovery_entry(&list)?;
+    let id = recovery_entry(&list, &loader_entries())?;
     // One-shot: only the next boot starts Recovery; the one after is normal.
     run("bootctl", &["set-oneshot", &id])?;
     println!("Restarting into Recovery ({id})...");
     reboot()
 }
 
-/// The boot menu entry of Recovery for the running version, from
-/// `bootctl list --json=short`. The running entry is "selected"; its Recovery
-/// entry has the same id with the profile number: `<id>@1`.
-fn recovery_entry(json: &str) -> Result<String> {
+/// The boot menu entry of Recovery for the running version. The running
+/// entry is "selected" in `bootctl list --json=short`; its Recovery entry is
+/// the second profile of the same kernel image, which systemd-boot calls
+/// `<id>@1`. systemd-boot's own list of entries (`loader`, from the
+/// LoaderEntries EFI variable) is checked first: `bootctl set-oneshot` takes
+/// systemd-boot's names.
+fn recovery_entry(json: &str, loader: &[String]) -> Result<String> {
     let entries: Value =
         serde_json::from_str(json).map_err(|e| err(format!("cannot read the boot menu: {e}")))?;
     let entries = entries.as_array().cloned().unwrap_or_default();
@@ -106,12 +109,50 @@ fn recovery_entry(json: &str) -> Result<String> {
         .ok_or_else(|| err("cannot find the running version in the boot menu"))?;
     let base = selected.split('@').next().unwrap_or(selected);
     let wanted = format!("{base}@1");
-    entries
+    let ids: Vec<String> = loader
         .iter()
-        .filter_map(|e| e["id"].as_str())
-        .find(|id| *id == wanted)
-        .map(str::to_string)
-        .ok_or_else(|| err(format!("the boot menu has no Recovery entry for {base}")))
+        .cloned()
+        .chain(
+            entries
+                .iter()
+                .filter_map(|e| e["id"].as_str().map(str::to_string)),
+        )
+        .collect();
+    ids.iter()
+        .find(|id| **id == wanted)
+        .cloned()
+        .ok_or_else(|| {
+            err(format!(
+                "the boot menu has no Recovery entry for {base} (entries: {})",
+                ids.join(", ")
+            ))
+        })
+}
+
+/// systemd-boot's names of the boot menu entries, from the LoaderEntries
+/// EFI variable: 4 bytes of attributes, then UTF-16 names ending in NUL.
+fn loader_entries() -> Vec<String> {
+    let path = "/sys/firmware/efi/efivars/LoaderEntries-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f";
+    let Ok(data) = std::fs::read(path) else {
+        return Vec::new();
+    };
+    parse_loader_entries(&data)
+}
+
+fn parse_loader_entries(data: &[u8]) -> Vec<String> {
+    let units: Vec<u16> = data
+        .get(4..)
+        .unwrap_or_default()
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| u16::from_le_bytes(*c))
+        .collect();
+    units
+        .split(|u| *u == 0)
+        .filter(|s| !s.is_empty())
+        .map(String::from_utf16_lossy)
+        .collect()
 }
 
 /// The interactive menu, shown on the console in Recovery.
@@ -261,7 +302,28 @@ mod tests {
             {"id":"xeeonos_1.0.2.efi","isSelected":true},
             {"id":"xeeonos_1.0.2.efi@1","isSelected":false}
         ]"#;
-        assert_eq!(recovery_entry(json).unwrap(), "xeeonos_1.0.2.efi@1");
-        assert!(recovery_entry("[]").is_err());
+        assert_eq!(recovery_entry(json, &[]).unwrap(), "xeeonos_1.0.2.efi@1");
+        assert!(recovery_entry("[]", &[]).is_err());
+        // Only systemd-boot knows the Recovery entry.
+        let json = r#"[{"id":"xeeonos_1.0.2.efi","isSelected":true}]"#;
+        let loader = vec![
+            "xeeonos_1.0.2.efi".to_string(),
+            "xeeonos_1.0.2.efi@1".to_string(),
+        ];
+        assert_eq!(
+            recovery_entry(json, &loader).unwrap(),
+            "xeeonos_1.0.2.efi@1"
+        );
+    }
+
+    #[test]
+    fn loader_variable() {
+        let mut data = vec![7, 0, 0, 0];
+        for name in ["a.efi", "a.efi@1"] {
+            for u in name.encode_utf16().chain([0]) {
+                data.extend(u.to_le_bytes());
+            }
+        }
+        assert_eq!(parse_loader_entries(&data), vec!["a.efi", "a.efi@1"]);
     }
 }

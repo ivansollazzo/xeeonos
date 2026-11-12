@@ -69,6 +69,6 @@ partition; `xctl encryption` says so. Reinstalling makes it encrypted.
 
 ## Tests
 
-CI (test 11) checks that the data partition is encrypted with the password
+CI (`tools/ci/encryption.sh`) checks that the data partition is encrypted with the password
 off, turns the password on, reads the recovery key, turns the password off
 with the recovery key, and starts the computer again without a password.

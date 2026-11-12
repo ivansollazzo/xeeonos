@@ -144,7 +144,7 @@ fn perform(action: &str, yes: bool) -> Result<()> {
             boot::rollback(&[])?;
             offer_reboot(yes)
         }
-        "network" => crate::network::screen(),
+        "network" => crate::network::screen().map(|_| ()),
         "shell" => shell(),
         "erase" => erase(yes),
         "reboot" => reboot(),

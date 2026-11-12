@@ -12,10 +12,11 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::io::{self, BufRead, Write};
+use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use crate::ui;
 use crate::util::{Result, err, need_root, run};
 
 /// Marks the setup as done; the service does not start again while it exists.
@@ -112,76 +113,298 @@ fn from_credential(text: &str) -> Result<Answers> {
     Ok(answers)
 }
 
-/// Ask every question on the console. A wrong answer is asked again.
+/// Keyboard layouts offered in the menu (console keymap names); any other
+/// can be typed.
+const KEYBOARDS: &[(&str, &str)] = &[
+    ("it", "Italiano"),
+    ("us", "English (US)"),
+    ("uk", "English (UK)"),
+    ("de", "Deutsch"),
+    ("de_CH-latin1", "Deutsch (Schweiz)"),
+    ("fr", "Français"),
+    ("fr_CH", "Français (Suisse)"),
+    ("es", "Español"),
+    ("br-abnt2", "Português (Brasil)"),
+    ("pt-latin1", "Português"),
+];
+
+/// The setup as dialog windows, one step at a time; "Back" goes to the
+/// previous step. Language, keyboard and time zone take effect as soon as
+/// they are chosen (the keyboard can be used right away with the new
+/// layout); the account is created only at the end.
 fn ask_all() -> Result<Answers> {
-    println!("\nWelcome to XeeonOS! A few questions before you start.\n");
-
-    println!("Language:");
-    for (i, (_, name, _, _)) in LANGUAGES.iter().enumerate() {
-        println!("  {}) {name}", i + 1);
+    let mut a = Answers {
+        language: "en_US.UTF-8".into(),
+        keyboard: "us".into(),
+        timezone: "UTC".into(),
+        hostname: "xeeonos".into(),
+        user: String::new(),
+        fullname: String::new(),
+        password: String::new(),
+        admin: true,
+    };
+    let mut step: usize = 0;
+    loop {
+        let forward = match step {
+            0 => ask_language(&mut a)?,
+            1 => ask_keyboard(&mut a)?,
+            2 => ask_timezone(&mut a)?,
+            3 => crate::network::screen()?,
+            4 => ask_hostname(&mut a)?,
+            5 => ask_account(&mut a)?,
+            _ => return Ok(a),
+        };
+        if forward {
+            step += 1;
+        } else {
+            step = step.saturating_sub(1);
+        }
     }
-    let language = ask_valid(
-        "Number, or another language (e.g. nl_NL.UTF-8) [1]: ",
-        "1",
-        |a| {
-            let locale = match a.parse::<usize>() {
-                Ok(n) if (1..=LANGUAGES.len()).contains(&n) => LANGUAGES[n - 1].0.to_string(),
-                _ => a.to_string(),
-            };
-            check_language(&locale).map(|_| locale)
-        },
-    )?;
-    let (keyboard, timezone) = defaults_for(&language);
+}
 
-    let keyboard = ask_valid(&format!("Keyboard layout [{keyboard}]: "), &keyboard, |a| {
-        check_keyboard(a).map(|_| a.to_string())
-    })?;
-    let timezone = ask_valid(&format!("Time zone [{timezone}]: "), &timezone, |a| {
-        check_timezone(a).map(|_| a.to_string())
-    })?;
-    let hostname = ask_valid("Computer name [xeeonos]: ", "xeeonos", |a| {
-        check_hostname(a).map(|_| a.to_string())
-    })?;
+fn ask_language(a: &mut Answers) -> Result<bool> {
+    let mut items: Vec<(String, String)> = LANGUAGES
+        .iter()
+        .map(|l| (l.0.to_string(), l.1.to_string()))
+        .collect();
+    items.push(("other".into(), "Other...".into()));
+    let Some(mut choice) = ui::menu(
+        "Welcome to XeeonOS",
+        "Choose your language:",
+        &items,
+        Some(&a.language),
+    )?
+    else {
+        // The first step: there is nothing to go back to.
+        return Ok(false);
+    };
+    if choice == "other" {
+        let Some(typed) = ui::input("Language", "A language, e.g. nl_NL.UTF-8:", "")? else {
+            return Ok(false);
+        };
+        choice = typed;
+    }
+    if let Err(e) = check_language(&choice) {
+        ui::message("Language", &e.to_string())?;
+        return Ok(false);
+    }
+    if choice != a.language {
+        let (keyboard, timezone) = defaults_for(&choice);
+        a.keyboard = keyboard;
+        a.timezone = timezone;
+    }
+    a.language = choice;
+    apply_language(&a.language)?;
+    Ok(true)
+}
 
-    println!("\nYour user account:");
-    let fullname = ask("Full name: ")?;
-    let suggested = fullname
-        .split_whitespace()
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
-    let user = ask_valid(&format!("User name [{suggested}]: "), &suggested, |a| {
-        check_user(a).map(|_| a.to_string())
-    })?;
-    let password = loop {
-        let first = ask_password("Password: ")?;
+fn ask_keyboard(a: &mut Answers) -> Result<bool> {
+    let mut items: Vec<(String, String)> = KEYBOARDS
+        .iter()
+        .map(|k| (k.0.to_string(), format!("{} ({})", k.1, k.0)))
+        .collect();
+    if !KEYBOARDS.iter().any(|k| k.0 == a.keyboard) {
+        items.insert(0, (a.keyboard.clone(), a.keyboard.clone()));
+    }
+    items.push(("other".into(), "Other...".into()));
+    let Some(mut choice) = ui::menu(
+        "Keyboard",
+        "Choose the keyboard layout. It works as soon as you choose it.",
+        &items,
+        Some(&a.keyboard),
+    )?
+    else {
+        return Ok(false);
+    };
+    if choice == "other" {
+        let Some(typed) = ui::input("Keyboard", "A keyboard layout, e.g. sv-latin1:", "")? else {
+            return ask_keyboard(a);
+        };
+        choice = typed;
+    }
+    if let Err(e) = check_keyboard(&choice) {
+        ui::message("Keyboard", &e.to_string())?;
+        // Ask again: stay on this step.
+        return ask_keyboard(a);
+    }
+    a.keyboard = choice;
+    apply_keyboard(&a.keyboard)?;
+    Ok(true)
+}
+
+fn ask_timezone(a: &mut Answers) -> Result<bool> {
+    let zones = timezones();
+    loop {
+        let current_region = a.timezone.split('/').next().unwrap_or("").to_string();
+        let mut regions: Vec<String> = zones
+            .iter()
+            .map(|z| z.split('/').next().unwrap_or(z).to_string())
+            .collect();
+        regions.dedup();
+        regions.push("UTC".into());
+        let items: Vec<(String, String)> = regions.iter().map(|r| (r.clone(), r.clone())).collect();
+        let Some(region) = ui::menu(
+            "Time zone",
+            &format!("Now: {}. Choose the region:", a.timezone),
+            &items,
+            Some(&current_region),
+        )?
+        else {
+            return Ok(false);
+        };
+        let chosen = if region == "UTC" {
+            "UTC".to_string()
+        } else {
+            let items: Vec<(String, String)> = zones
+                .iter()
+                .filter(|z| z.starts_with(&format!("{region}/")))
+                .map(|z| (z.clone(), z[region.len() + 1..].replace('_', " ")))
+                .collect();
+            match ui::menu("Time zone", "Choose the city:", &items, Some(&a.timezone))? {
+                Some(z) => z,
+                // Back to the list of regions.
+                None => continue,
+            }
+        };
+        check_timezone(&chosen)?;
+        a.timezone = chosen;
+        apply_timezone(&a.timezone)?;
+        return Ok(true);
+    }
+}
+
+fn ask_hostname(a: &mut Answers) -> Result<bool> {
+    loop {
+        let Some(name) = ui::input(
+            "Computer name",
+            "The name of this computer on the network:",
+            &a.hostname,
+        )?
+        else {
+            return Ok(false);
+        };
+        match check_hostname(&name) {
+            Ok(()) => {
+                a.hostname = name;
+                return Ok(true);
+            }
+            Err(e) => ui::message("Computer name", &e.to_string())?,
+        }
+    }
+}
+
+fn ask_account(a: &mut Answers) -> Result<bool> {
+    let Some(fullname) = ui::input("Your account", "Your full name:", &a.fullname)? else {
+        return Ok(false);
+    };
+    a.fullname = fullname;
+    let suggested = if a.user.is_empty() {
+        a.fullname
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .to_lowercase()
+    } else {
+        a.user.clone()
+    };
+    loop {
+        let Some(user) = ui::input(
+            "Your account",
+            "Your user name (lowercase letters and digits):",
+            &suggested,
+        )?
+        else {
+            return ask_account(a);
+        };
+        match check_user(&user) {
+            Ok(()) => {
+                a.user = user;
+                break;
+            }
+            Err(e) => ui::message("Your account", &e.to_string())?,
+        }
+    }
+    loop {
+        let Some(first) = ui::password("Your account", &format!("Password for {}:", a.user))?
+        else {
+            return ask_account(a);
+        };
         if first.is_empty() {
-            println!("  The password cannot be empty.");
+            ui::message("Your account", "The password cannot be empty.")?;
             continue;
         }
-        if ask_password("Password again: ")? == first {
-            break first;
+        let Some(again) = ui::password("Your account", "The same password again:")? else {
+            continue;
+        };
+        if again == first {
+            a.password = first;
+            break;
         }
-        println!("  The passwords do not match, try again.");
-    };
-    let admin = ask_valid("Administrator (can use sudo)? [Y/n]: ", "y", |a| {
-        match a.to_lowercase().as_str() {
-            "y" | "yes" | "s" | "si" | "sì" => Ok(true),
-            "n" | "no" => Ok(false),
-            _ => Err(err("answer y or n")),
-        }
-    })?;
+        ui::message("Your account", "The passwords do not match, try again.")?;
+    }
+    a.admin = ui::yes_no(
+        "Your account",
+        &format!(
+            "Make {} an administrator?\n\nAn administrator can change the system \
+             settings and use sudo. The first account is usually an administrator.",
+            a.user
+        ),
+        false,
+    )?;
+    Ok(true)
+}
 
-    Ok(Answers {
-        language,
-        keyboard,
-        timezone,
-        hostname,
-        user,
-        fullname,
-        password,
-        admin,
-    })
+/// The time zones of the world, from tzdata's zone1970.tab (one per region
+/// of the world, the same list `timedatectl list-timezones` uses), sorted.
+fn timezones() -> Vec<String> {
+    let text = fs::read_to_string("/usr/share/zoneinfo/zone1970.tab").unwrap_or_default();
+    let mut zones: Vec<String> = text
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| l.split('\t').nth(2))
+        .map(str::to_string)
+        .collect();
+    zones.sort();
+    zones.dedup();
+    zones
+}
+
+/// The language: written to /etc/locale.conf, and used from now on by the
+/// windows of the setup.
+fn apply_language(locale: &str) -> Result<()> {
+    run(
+        "systemd-firstboot",
+        &["--force", &format!("--locale={locale}")],
+    )?;
+    // SAFETY: xctl has one thread; nothing reads the environment meanwhile.
+    unsafe { std::env::set_var("LANG", locale) };
+    Ok(())
+}
+
+/// The keyboard: written to /etc/vconsole.conf and loaded on the console at
+/// once, so the next answer is typed with the new layout.
+fn apply_keyboard(keymap: &str) -> Result<()> {
+    run(
+        "systemd-firstboot",
+        &["--force", &format!("--keymap={keymap}")],
+    )?;
+    let _ = Command::new("loadkeys")
+        .arg("-q")
+        .arg(keymap)
+        .stdout(Stdio::null())
+        .status();
+    Ok(())
+}
+
+/// The time zone: /etc/localtime, at once.
+fn apply_timezone(zone: &str) -> Result<()> {
+    run(
+        "systemd-firstboot",
+        &["--force", &format!("--timezone={zone}")],
+    )?;
+    // SAFETY: as above.
+    unsafe { std::env::set_var("TZ", format!(":{zone}")) };
+    Ok(())
 }
 
 /// Write the configuration and create the user.
@@ -328,38 +551,6 @@ fn find_file(dir: &Path, name: &str) -> bool {
             e.file_name() == name
         }
     })
-}
-
-fn ask(question: &str) -> Result<String> {
-    print!("{question}");
-    io::stdout().flush()?;
-    let mut line = String::new();
-    if io::stdin().lock().read_line(&mut line)? == 0 {
-        return Err(err("no answer (end of input)"));
-    }
-    Ok(line.trim().to_string())
-}
-
-/// Ask until `check` accepts the answer; an empty answer means `default`.
-/// `impl Fn(&str) -> Result<T>`: any function (or closure) of that shape.
-fn ask_valid<T>(question: &str, default: &str, check: impl Fn(&str) -> Result<T>) -> Result<T> {
-    loop {
-        let answer = ask(question)?;
-        let answer = if answer.is_empty() { default } else { &answer };
-        match check(answer) {
-            Ok(value) => return Ok(value),
-            Err(e) => println!("  {e}"),
-        }
-    }
-}
-
-/// Ask without showing what is typed.
-fn ask_password(question: &str) -> Result<String> {
-    let _ = Command::new("stty").arg("-echo").status();
-    let answer = ask(question);
-    let _ = Command::new("stty").arg("echo").status();
-    println!();
-    answer
 }
 
 #[cfg(test)]

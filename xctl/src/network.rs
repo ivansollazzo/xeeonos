@@ -39,7 +39,7 @@ pub fn run_network(args: &[String]) -> Result<()> {
     match args.first().map(String::as_str) {
         None => {
             need_root("network")?;
-            screen()
+            screen().map(|_| ())
         }
         Some("status") => {
             print!("{}", status_text()?);
@@ -345,7 +345,8 @@ fn describe(ipv4: &Ipv4) -> String {
 }
 
 /// The interactive network screen. Returns when the user chooses "Done".
-pub fn screen() -> Result<()> {
+/// Returns false if the user chose "Back", true for "Done".
+pub fn screen() -> Result<bool> {
     loop {
         let devs = devices()?;
         let mut items: Vec<(String, String)> = devs
@@ -373,10 +374,10 @@ pub fn screen() -> Result<()> {
             Some("done"),
         )?
         else {
-            return Ok(());
+            return Ok(false);
         };
         let result = match choice.as_str() {
-            "done" => return Ok(()),
+            "done" => return Ok(true),
             "nmtui" => {
                 let _ = Command::new("nmtui")
                     .env("NEWT_COLORS", ui::COLORS)

@@ -4,7 +4,9 @@
 Description=XeeonOS firewall
 Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/firewall.md
 DefaultDependencies=no
-After=local-fs.target
+# nft reads /etc/protocols ("icmp"), which at the first boot is linked from
+# /usr/share/factory/etc by systemd-tmpfiles.
+After=local-fs.target systemd-tmpfiles-setup.service
 Before=network-pre.target shutdown.target
 Wants=network-pre.target
 Conflicts=shutdown.target

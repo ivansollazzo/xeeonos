@@ -6,11 +6,13 @@
 mod boot;
 mod channel;
 mod install;
+mod network;
 mod oci;
 mod packages;
 mod recovery;
 mod setup;
 mod status;
+mod ui;
 mod update;
 mod util;
 mod version;
@@ -70,6 +72,12 @@ Commands:
       --from <dir>       Install the version in <dir> instead of the one
                          on the installation medium.
       --yes              Do not ask for confirmation (for automated tests).
+  network [<what>]       Network settings: without <what>, a screen to
+                         choose a Wi-Fi network or set up a wired one.
+      status             Show the network devices and their addresses.
+      ethernet [--device <dev>] (--dhcp | --address <ip>/<prefix>
+               --gateway <ip> [--dns <ip>,...])
+      wifi <name> [--password <p>] [--dhcp | --address ... ]
   recovery               Restart into Recovery (asks first). In Recovery,
                          show the Recovery menu: reinstall, previous version,
                          network, shell, erase everything, restart.
@@ -92,6 +100,7 @@ fn main() {
         "recovery" => recovery::run_recovery(rest),
         "setup" => setup::run_setup(rest),
         "channel" => channel::run(rest),
+        "network" => network::run_network(rest),
         "help" | "-h" | "--help" => {
             println!("{USAGE}");
             Ok(())

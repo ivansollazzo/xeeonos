@@ -75,7 +75,8 @@ Commands:
                          The running version is marked as bad and will not
                          be started (or installed) again.
   channel [<name>]       Show the update channel, or switch to <name>:
-                         experimental, or <N>.x-alpha, <N>.x-beta, <N>.x-stable.
+                         experimental, or <major>.<minor>-alpha|beta|stable
+                         (e.g. 1.0-stable, 1.1-beta).
       --reset            Go back to the channel this version was built for.
   packages [<name>]      List the packages of this version (and their
                          versions); with <name>, only those containing it.

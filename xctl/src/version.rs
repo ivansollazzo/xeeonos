@@ -35,41 +35,48 @@ pub fn parse_os_release(text: &str) -> HashMap<String, String> {
 /// | version                 | channel        |
 /// |-------------------------|----------------|
 /// | `0.1.0-experimental.42` | `experimental` |
-/// | `1.2.0-beta.7`          | `1.x-beta`     |
-/// | `1.2.0`                 | `1.x-stable`   |
+/// | `1.2.0-beta.7`          | `1.2-beta`     |
+/// | `1.2.3`                 | `1.2-stable`   |
 /// | `0.1.0-dev.8`           | none           |
 ///
 /// `Option<String>` is Rust's way of saying "maybe a value": `Some(..)` or
 /// `None`. Development builds have no channel.
 pub fn channel_of(version: &str) -> Option<String> {
-    let major = version.split('.').next()?;
-    if major.is_empty() || !major.chars().all(|c| c.is_ascii_digit()) {
+    let (number, rest) = match version.split_once('-') {
+        Some((n, r)) => (n, Some(r)),
+        None => (version, None),
+    };
+    let mut parts = number.split('.');
+    let (major, minor) = (parts.next()?, parts.next()?);
+    if !is_number(major) || !is_number(minor) {
         return None;
     }
-    match version.split_once('-') {
-        None => Some(format!("{major}.x-stable")),
-        Some((_, rest)) => match rest.split('.').next() {
-            Some("experimental") => Some("experimental".to_string()),
-            Some(pre @ ("alpha" | "beta")) => Some(format!("{major}.x-{pre}")),
-            _ => None,
-        },
+    match rest.map(|r| r.split('.').next().unwrap_or_default()) {
+        None => Some(format!("{major}.{minor}-stable")),
+        Some("experimental") => Some("experimental".to_string()),
+        Some(pre @ ("alpha" | "beta")) => Some(format!("{major}.{minor}-{pre}")),
+        _ => None,
     }
 }
 
-/// Is `name` a channel users can choose?
-/// `experimental`, or `<N>.x-alpha`, `<N>.x-beta`, `<N>.x-stable`.
+/// Is `name` a channel users can choose? `experimental`, or a release
+/// channel `<major>.<minor>-alpha|beta|stable` (e.g. `1.0-stable`): the
+/// same name as its branch and its tag on the registry.
 pub fn is_valid_channel(name: &str) -> bool {
     if name == "experimental" {
         return true;
     }
-    match name.split_once(".x-") {
-        Some((major, kind)) => {
-            !major.is_empty()
-                && major.chars().all(|c| c.is_ascii_digit())
-                && matches!(kind, "alpha" | "beta" | "stable")
-        }
-        None => false,
-    }
+    let Some((number, stage)) = name.split_once('-') else {
+        return false;
+    };
+    let Some((major, minor)) = number.split_once('.') else {
+        return false;
+    };
+    is_number(major) && is_number(minor) && matches!(stage, "alpha" | "beta" | "stable")
+}
+
+fn is_number(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
 }
 
 /// Compare two versions the way people expect: numbers by value, so that
@@ -125,25 +132,29 @@ mod tests {
             channel_of("0.1.0-experimental.42").as_deref(),
             Some("experimental")
         );
-        assert_eq!(channel_of("1.2.0-beta.7").as_deref(), Some("1.x-beta"));
-        assert_eq!(channel_of("1.2.0-alpha.3").as_deref(), Some("1.x-alpha"));
-        assert_eq!(channel_of("1.2.0").as_deref(), Some("1.x-stable"));
+        assert_eq!(channel_of("1.2.0-beta.7").as_deref(), Some("1.2-beta"));
+        assert_eq!(channel_of("1.2.0-alpha.3").as_deref(), Some("1.2-alpha"));
+        assert_eq!(channel_of("1.2.3").as_deref(), Some("1.2-stable"));
+        assert_eq!(channel_of("1.0.0").as_deref(), Some("1.0-stable"));
         assert_eq!(channel_of("0.1.0-dev.8"), None);
         assert_eq!(channel_of("unknown"), None);
     }
 
     #[test]
     fn valid_channels() {
-        for ok in ["experimental", "1.x-beta", "12.x-stable", "0.x-alpha"] {
+        for ok in ["experimental", "1.0-beta", "12.3-stable", "0.1-alpha"] {
             assert!(is_valid_channel(ok), "{ok}");
         }
         for bad in [
             "",
             "beta",
             "x-beta",
-            "1.x-gamma",
-            "1.x-beta/../",
-            "a.x-beta",
+            "1.x-beta",
+            "1-beta",
+            "1.0-gamma",
+            "1.0-beta/../",
+            "a.0-beta",
+            "1.0.0-stable",
         ] {
             assert!(!is_valid_channel(bad), "{bad}");
         }

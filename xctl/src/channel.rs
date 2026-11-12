@@ -49,7 +49,8 @@ pub fn run(args: &[String]) -> Result<()> {
         }
         Some(name) => {
             return Err(err(format!(
-                "unknown channel '{name}' (expected experimental or <N>.x-alpha, <N>.x-beta, <N>.x-stable)"
+                "unknown channel '{name}' (expected experimental, or a channel like \
+                 1.0-stable, 1.0-beta, 1.1-alpha)"
             )));
         }
     }

@@ -148,11 +148,11 @@ mod tests {
     #[test]
     fn references() {
         assert_eq!(
-            parse_reference("ghcr.io/ivansollazzo/xeeonos:1.x-beta").unwrap(),
+            parse_reference("ghcr.io/ivansollazzo/xeeonos:1.0-beta").unwrap(),
             Reference {
                 registry: "ghcr.io".into(),
                 repository: "ivansollazzo/xeeonos".into(),
-                tag: "1.x-beta".into()
+                tag: "1.0-beta".into()
             }
         );
         assert!(parse_reference("xeeonos").is_err());

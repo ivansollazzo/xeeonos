@@ -21,7 +21,7 @@ Every push to a channel branch publishes its update to the GitHub container
 registry as an OCI artifact, readable without login:
 
     ghcr.io/ivansollazzo/xeeonos:<version>   e.g. 0.1.0-experimental.42
-    ghcr.io/ivansollazzo/xeeonos:<channel>   e.g. experimental, 1.x-beta, 1.x-stable
+    ghcr.io/ivansollazzo/xeeonos:<channel>   e.g. experimental, 1.0-stable, 1.1-beta
 
 Pull requests never publish.
 
@@ -34,7 +34,7 @@ sudo xctl update                 # install the newest version of the channel
 xctl update --from /run/media/usb/update        # from a directory
 xctl update --from http://server/xeeonos/       # from a web directory
 xctl channel                     # show the channel
-sudo xctl channel 1.x-beta       # switch channel (stored in /etc/xeeonos/channel)
+sudo xctl channel 1.1-beta       # switch channel (stored in /etc/xeeonos/channel)
 ```
 
 `xctl update` downloads only the signed manifest first (a few hundred bytes)
@@ -54,9 +54,23 @@ when a new version is available ([maintenance.md](maintenance.md)).
 
 ## Channels and versions
 
-The channel is the branch: `experimental`, then `<N>.x/alpha`, `<N>.x/beta`,
-`<N>.x/stable`. `mkosi.version` holds the base version, and on a `<N>.x/*`
-branch it must start with `N.` (the channel tag is derived from it).
+The channel is the branch, with the same name everywhere (branch, `xctl
+channel`, registry tag):
+
+| Branch / channel | What | Versions |
+|---|---|---|
+| `experimental` | Free development, continuous builds | `0.1.0-experimental.42` |
+| `<major>.<minor>-alpha`, `-beta` | A release being prepared, e.g. `1.1-alpha`, `1.1-beta` | `1.1.0-beta.57` |
+| `<major>.<minor>-stable` | A release, e.g. `1.0-stable`: only its fixes | `1.0.0`, `1.0.1` |
+
+Each minor version has its own branches, so the stable version and the one
+in development stay apart. A system on `1.0-stable` gets only the fixes of
+1.0; moving to 1.1 is a choice (`sudo xctl channel 1.1-stable`). Updates
+only go forward: a channel whose versions are older than the running one
+offers nothing until it passes it.
+
+`mkosi.version` holds the base version, and on a release branch it must
+belong to it (`1.0.x` on `1.0-*`; `tools/version.sh` checks).
 
 ## Signing key
 

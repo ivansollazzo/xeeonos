@@ -92,7 +92,9 @@ Both are also in Recovery → Disk encryption.
 
 - **Pull requests** are signed with a throwaway key made for each build
   (`tools/secureboot.sh --test`). Their images are never published.
-- **Channel builds** are signed with the XeeonOS key. Its private part is
+- **Channel builds** are signed with the XeeonOS key (`secureboot/xeeonos.crt`,
+  "XeeonOS Secure Boot", SHA-256 fingerprint
+  `FC:5C:1B:46:7D:5D:4C:83:A0:C6:F6:4F:A5:2F:C2:03:F6:22:80:47:63:A5:DC:80:5C:2C:44:6D:D6:0F:31:45`). Its private part is
   only in the repository secret `XEEONOS_SECUREBOOT_KEY` (and in the
   owner's backup). The certificate, which is public, is
   `secureboot/xeeonos.crt`.

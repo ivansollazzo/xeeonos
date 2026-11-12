@@ -7,10 +7,13 @@
 //!   xeeonos_<v>.usr-x86-64-verity.<uuid>.raw.zst  its dm-verity hash tree
 //!   SHA256SUMS, SHA256SUMS.gpg                    manifest + signature
 //!
-//! Steps: fetch the signed manifest, check its signature against the keys
-//! shipped in /usr, fetch the files it lists, check their hashes, then let
-//! systemd-sysupdate write them into the free /usr slot and the ESP. The
-//! running system is never modified: the new version starts at the next boot.
+//! Steps: fetch the signed manifest (a few hundred bytes), check its
+//! signature against the keys shipped in /usr, and read the version from the
+//! kernel's name in it. Only when that version is newer than the running one
+//! (and did not already fail here) fetch the files it lists, check their
+//! hashes, then let systemd-sysupdate write them into the free /usr slot and
+//! the ESP. The running system is never modified: the new version starts at
+//! the next boot. `--check` stops after the version check, without root.
 
 use std::cmp::Ordering;
 use std::fs;
@@ -50,6 +53,7 @@ impl Source {
 pub fn run(args: &[String]) -> Result<()> {
     // Parse the options.
     let mut from = None;
+    let mut check = false;
     let mut keyrings = vec![PathBuf::from(config::KEYRING)];
     let mut it = args.iter();
     while let Some(arg) = it.next() {
@@ -61,13 +65,16 @@ pub fn run(args: &[String]) -> Result<()> {
                         .clone(),
                 )
             }
+            "--check" => check = true,
             "--keyring" => keyrings.push(PathBuf::from(
                 it.next().ok_or_else(|| err("--keyring needs a file"))?,
             )),
             other => return Err(err(format!("unknown option for update: {other}"))),
         }
     }
-    need_root("update")?;
+    if !check {
+        need_root("update")?;
+    }
 
     let os = read_os_release(config::OS_RELEASE)?;
     let current = os.get("IMAGE_VERSION").cloned().unwrap_or_default();
@@ -85,15 +92,24 @@ pub fn run(args: &[String]) -> Result<()> {
 
     // Start from an empty download directory, and clean it up at the end
     // whatever happens (the `Cleanup` value removes it when dropped).
-    let cache = Path::new(config::CACHE);
+    // (--check runs without root: it uses a private temporary directory.)
+    let check_dir = std::env::temp_dir().join(format!("xctl-check-{}", std::process::id()));
+    let cache = if check {
+        check_dir.as_path()
+    } else {
+        Path::new(config::CACHE)
+    };
     let _ = fs::remove_dir_all(cache);
     fs::create_dir_all(cache)?;
     let _cleanup = Cleanup(cache);
 
-    fetch(&source, cache, &keyrings)?;
-
-    let new =
-        newest_version(cache)?.ok_or_else(|| err("the source contains no XeeonOS version"))?;
+    // First only the signed manifest: it says which version the source has.
+    fetch_manifest(&source, cache, &keyrings)?;
+    let names = manifest_files(&fs::read_to_string(cache.join("SHA256SUMS"))?)?;
+    let new = versions_in(&names)
+        .into_iter()
+        .max_by(|a, b| compare(a, b))
+        .ok_or_else(|| err("the source contains no XeeonOS version"))?;
     match compare(&new, &current) {
         Ordering::Equal => {
             println!("XeeonOS {current} is up to date.");
@@ -115,7 +131,16 @@ pub fn run(args: &[String]) -> Result<()> {
         );
         return Ok(());
     }
+    if check {
+        println!(
+            "XeeonOS {new} is available (running: {current}). Install it with: sudo xctl update"
+        );
+        return Ok(());
+    }
 
+    // Only now the large files.
+    fetch_files(&source, cache, &names)?;
+    check_hashes(cache)?;
     println!("Installing XeeonOS {new} (running: {current})...");
     // The files were verified above against the signed manifest.
     run_program(config::SYSUPDATE, &["update", &new])?;
@@ -132,35 +157,27 @@ impl Drop for Cleanup<'_> {
     }
 }
 
-/// Put the update files into `dir`, verifying the signed manifest first.
-fn fetch(source: &Source, dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
+/// Put the signed manifest (SHA256SUMS) into `dir` and verify its signature.
+fn fetch_manifest(source: &Source, dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
     if !matches!(source, Source::Dir(_)) {
         wait_for_network();
     }
     match source {
         Source::Oci(reference) => {
-            println!("Downloading {reference}...");
+            println!("Checking {reference}...");
             let artifact = oci::Artifact::open(reference)?;
             artifact.download("SHA256SUMS", &dir.join("SHA256SUMS"))?;
             // A missing signature is reported by verify_signature.
             let _ = artifact.download("SHA256SUMS.gpg", &dir.join("SHA256SUMS.gpg"));
-            verify_signature(dir, keyrings)?;
-            for name in manifest_files(&fs::read_to_string(dir.join("SHA256SUMS"))?)? {
-                artifact.download(&name, &dir.join(&name))?;
-            }
         }
         Source::Http(base) => {
-            println!("Downloading from {base}...");
+            println!("Checking {base}...");
             download(&format!("{base}/SHA256SUMS"), &dir.join("SHA256SUMS"))?;
             // A missing signature is reported by verify_signature.
             let _ = download(
                 &format!("{base}/SHA256SUMS.gpg"),
                 &dir.join("SHA256SUMS.gpg"),
             );
-            verify_signature(dir, keyrings)?;
-            for name in manifest_files(&fs::read_to_string(dir.join("SHA256SUMS"))?)? {
-                download(&format!("{base}/{name}"), &dir.join(&name))?;
-            }
         }
         Source::Dir(from) => {
             if !from.join("SHA256SUMS").exists() {
@@ -170,14 +187,35 @@ fn fetch(source: &Source, dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
             if from.join("SHA256SUMS.gpg").exists() {
                 fs::copy(from.join("SHA256SUMS.gpg"), dir.join("SHA256SUMS.gpg"))?;
             }
-            verify_signature(dir, keyrings)?;
+        }
+    }
+    verify_signature(dir, keyrings)
+}
+
+/// Put the files listed in the (verified) manifest into `dir`.
+fn fetch_files(source: &Source, dir: &Path, names: &[String]) -> Result<()> {
+    match source {
+        Source::Oci(reference) => {
+            println!("Downloading {reference}...");
+            let artifact = oci::Artifact::open(reference)?;
+            for name in names {
+                artifact.download(name, &dir.join(name))?;
+            }
+        }
+        Source::Http(base) => {
+            println!("Downloading from {base}...");
+            for name in names {
+                download(&format!("{base}/{name}"), &dir.join(name))?;
+            }
+        }
+        Source::Dir(from) => {
             println!("Copying from {}...", from.display());
-            for name in manifest_files(&fs::read_to_string(dir.join("SHA256SUMS"))?)? {
-                fs::copy(from.join(&name), dir.join(&name))?;
+            for name in names {
+                fs::copy(from.join(name), dir.join(name))?;
             }
         }
     }
-    check_hashes(dir)
+    Ok(())
 }
 
 /// Right after boot the network may still be coming up (NetworkManager

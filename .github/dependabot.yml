@@ -7,3 +7,7 @@ updates:
     schedule:
       interval: weekly
     target-branch: experimental
+    # All the updates of a week in one pull request (one CI run).
+    groups:
+      github-actions:
+        patterns: ["*"]

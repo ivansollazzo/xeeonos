@@ -54,6 +54,8 @@ Commands:
                          a directory (e.g. a USB stick), an http(s) URL of a
                          directory, or oci://<registry>/<name>:<tag>.
       --keyring <file>   Also accept updates signed by the keys in <file>.
+      --check            Only say whether a newer version is available
+                         (downloads only the small signed manifest; no root).
   rollback               Go back to the previous version at the next restart.
                          The running version is marked as bad and will not
                          be started (or installed) again.

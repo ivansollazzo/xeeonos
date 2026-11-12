@@ -452,14 +452,10 @@ fn write_partition(file: &Path, device: &Path) -> Result<()> {
 /// The first partition of GPT type `kind` on `disk` (the ESP or the boot
 /// partition, just created or already there).
 fn partition_of_type(disk: &str, kind: &str) -> Result<String> {
-    let list = output(
-        "lsblk",
-        &["--list", "--noheadings", "--output", "PATH,PARTTYPE", disk],
-    )?;
-    list.lines()
-        .filter_map(|l| l.split_once(char::is_whitespace))
-        .find(|(_, t)| t.trim().eq_ignore_ascii_case(kind))
-        .map(|(path, _)| path.to_string())
+    partitions(disk)
+        .into_iter()
+        .find(|p| p.1.eq_ignore_ascii_case(kind))
+        .map(|p| p.0)
         .ok_or_else(|| err(format!("no partition of type {kind} found on {disk}")))
 }
 
@@ -514,7 +510,8 @@ fn disks() -> Result<Vec<Disk>> {
         disks.push(Disk {
             parts: partitions(&path),
             free: largest_free(&path),
-            gpt: d["pttype"] == "gpt",
+            gpt: output("sfdisk", &["--json", &path])
+                .is_ok_and(|json| parse_sfdisk(&json).0 == "gpt"),
             size: d["size"].as_u64().unwrap_or(0),
             model: d["model"].as_str().unwrap_or("").trim().to_string(),
             path,
@@ -539,35 +536,34 @@ fn medium_disk() -> Option<String> {
 
 /// The partitions on `disk`: (device, GPT type, size).
 fn partitions(disk: &str) -> Vec<(String, String, u64)> {
-    let Ok(json) = output(
-        "lsblk",
-        &[
-            "--json",
-            "--bytes",
-            "--output",
-            "PATH,TYPE,PARTTYPE,SIZE",
-            disk,
-        ],
-    ) else {
-        return Vec::new();
-    };
-    let Ok(list) = serde_json::from_str::<Value>(&json) else {
-        return Vec::new();
-    };
-    list["blockdevices"]
+    output("sfdisk", &["--json", disk])
+        .map(|json| parse_sfdisk(&json).1)
+        .unwrap_or_default()
+}
+
+/// `sfdisk --json` reads the partition table itself (lsblk depends on what
+/// udev has probed so far, which can be nothing early in the boot): the
+/// table's kind ("gpt", "dos") and the partitions (device, type, bytes).
+fn parse_sfdisk(json: &str) -> (String, Vec<(String, String, u64)>) {
+    let v: Value = serde_json::from_str(json).unwrap_or_default();
+    let table = &v["partitiontable"];
+    let sector = table["sectorsize"].as_u64().unwrap_or(512);
+    let parts = table["partitions"]
         .as_array()
         .into_iter()
         .flatten()
-        .flat_map(|d| d["children"].as_array().cloned().unwrap_or_default())
-        .filter(|p| p["type"] == "part")
         .map(|p| {
             (
-                p["path"].as_str().unwrap_or_default().to_string(),
-                p["parttype"].as_str().unwrap_or_default().to_string(),
-                p["size"].as_u64().unwrap_or(0),
+                p["node"].as_str().unwrap_or_default().to_string(),
+                p["type"].as_str().unwrap_or_default().to_lowercase(),
+                p["size"].as_u64().unwrap_or(0) * sector,
             )
         })
-        .collect()
+        .collect();
+    (
+        table["label"].as_str().unwrap_or_default().to_string(),
+        parts,
+    )
 }
 
 /// The largest unpartitioned area of `disk`, in bytes, from `sfdisk
@@ -928,6 +924,20 @@ mod tests {
             "7581d84d-0bdc-1119-dfef-227c25b31ee9"
         );
         assert!(dashed_uuid("xyz").is_err());
+    }
+
+    #[test]
+    fn sfdisk_json() {
+        let json = r#"{"partitiontable":{"label":"gpt","device":"/dev/vda","unit":"sectors",
+            "sectorsize":512,"partitions":[
+            {"node":"/dev/vda1","start":2048,"size":204800,"type":"C12A7328-F81F-11D2-BA4B-00A0C93EC93B"},
+            {"node":"/dev/vda2","start":206848,"size":4194304,"type":"0FC63DAF-8483-4772-8E79-3D69D8477DE4"}]}}"#;
+        let (label, parts) = parse_sfdisk(json);
+        assert_eq!(label, "gpt");
+        assert_eq!(parts[0].0, "/dev/vda1");
+        assert_eq!(parts[0].1, ESP_TYPE);
+        assert_eq!(parts[0].2, 100 * 1024 * 1024);
+        assert_eq!(parts.len(), 2);
     }
 
     #[test]

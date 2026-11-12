@@ -59,6 +59,6 @@ echo "::endgroup::"
 
 echo "::group::4. Another TPM: the password is asked"
 TIMEOUT=600 tools/boot-test.sh --secure-boot --efivars out/vars.fd --tpm out/other-tpm \
-    --expect "Please enter passphrase for disk" \
+    --expect "Please enter passphrase.* for disk" \
     out/disk.raw out/serial-secureboot-4-other-tpm.log
 echo "::endgroup::"

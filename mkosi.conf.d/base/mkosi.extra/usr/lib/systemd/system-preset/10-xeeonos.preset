@@ -2,6 +2,8 @@
 # distribution defaults; keep this list short (principle: on-demand services).
 enable NetworkManager.service
 enable systemd-timesyncd.service
+# Bluetooth (bluez), like Wi-Fi: also for keyboards and mice.
+enable bluetooth.service
 # Stops what fills the memory before the computer freezes (see the
 # -.slice.d and user@.service.d drop-ins).
 enable systemd-oomd.service

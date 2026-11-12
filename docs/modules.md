@@ -18,12 +18,12 @@ snapshot, output, tools tree) stay in the top-level `mkosi.conf`.
 
 | Module | Kind | Purpose |
 | --- | --- | --- |
-| `base` | core | Kernel, firmware, systemd, NetworkManager, all languages, XeeonOS identity and version; removes pacman and build-only files |
+| `base` | core | Kernel, firmware, systemd, NetworkManager, Bluetooth, all languages, XeeonOS identity and version; removes pacman and build-only files |
 | `system` | core | Sealed disk: ESP, A/B `/usr` slots (erofs + dm-verity), Btrfs data partition, hermetic `/etc`, sysupdate definitions, boot health check, first-boot setup, Recovery boot entry |
-| `extra` | core | Services every installed system has, whatever the desktop: sound (PipeWire) and Bluetooth; not in the live ISO |
 | `xctl` | core | The `xctl` system tool (Rust, source in `xctl/`): status, update, rollback, channel, packages, setup, install-system |
 | `live` | optional | Live ISO: UKI running from RAM, root autologin, installer tools; replaces `system` |
-| `plasma` | optional | KDE Plasma desktop, minimal: Wayland session, SDDM login screen, network/sound/Bluetooth/power settings, Konsole, Dolphin, Spectacle, System Monitor, Ark (see [desktop.md](desktop.md)) |
+| `audio` | optional | Sound for every desktop: PipeWire (PulseAudio, ALSA and JACK interfaces) |
+| `plasma` | optional | KDE Plasma desktop, minimal: Wayland session, SDDM login screen, network/Bluetooth/screens/power settings (sound settings with `audio`), Konsole, Dolphin, Spectacle, System Monitor, Ark (see [desktop.md](desktop.md)) |
 
 The initrd built into every kernel image is configured in the top-level
 `mkosi.initrd.conf/` (mkosi only reads it there): it restarts instead of
@@ -38,8 +38,8 @@ A variant is a set of optional modules on top of the core ones:
 | --- | --- |
 | Core (no desktop), installed system | `mkosi build` |
 | Live ISO | `mkosi --profile=live build` |
-| Desktop: what CI builds and publishes | `mkosi --profile=plasma build` |
-| Desktop, later | `mkosi --profile=plasma,flatpak,xapp build` |
+| Desktop: what CI builds and publishes | `mkosi --profile=plasma,audio build` |
+| Desktop, later | `mkosi --profile=plasma,audio,flatpak,xapp,printing build` |
 
 ## Runtime modules
 

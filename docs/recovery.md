@@ -14,15 +14,17 @@ menu on the screen, in black and white dialog windows:
    (`xctl network`): choose a Wi-Fi network, or set a wired or Wi-Fi
    connection to automatic (DHCP) or to a manual address; "Advanced" opens
    `nmtui`. Saved networks already work in Recovery.
-4. **Shell**: asks for the name and password of an administrator (a user of
+4. **Disk password**: turn the disk password on or off
+   ([encryption.md](encryption.md)).
+5. **Shell**: asks for the name and password of an administrator (a user of
    the `wheel` group), then opens a shell as that user; `sudo -i` gives root
    rights.
-5. **Erase everything**: type `ERASE` to confirm. At the restart the data
+6. **Erase everything**: type `ERASE` to confirm. At the restart the data
    partition (users, settings, files: `/etc`, `/var`, `/home`) is erased and
-   created again, empty; the computer starts as just after installation, with
+   created again, empty and encrypted without a password; the computer starts as just after installation, with
    the first-boot setup ([setup.md](setup.md)). The system (`/usr`) is not
    touched.
-6. **Restart**.
+7. **Restart**.
 
 `xctl install-system` also works in Recovery (see [install.md](install.md)).
 
@@ -53,7 +55,7 @@ not safe. If no version starts at all, use the installation medium
   the partitions marked `FactoryReset=yes` in `/usr/lib/repart.d`: only the
   data partition.
 - Each action can also be run without the menu, in Recovery only:
-  `xctl recovery <reinstall|rollback|network|shell|erase|reboot> [--yes]`.
+  `xctl recovery <reinstall|rollback|network|encryption|shell|erase|reboot> [--yes]`.
 
 ## Tests
 

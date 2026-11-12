@@ -61,6 +61,18 @@ pub fn run(check: bool) -> Result<()> {
         yes_no(usr_verity)
     );
     println!("Data (/):    {root_fs}");
+    // Without root rights the LUKS header cannot be read: say only whether
+    // the data partition is encrypted.
+    let encryption = match crate::encryption::data_partition() {
+        Err(_) => "no".to_string(),
+        Ok(dev) if crate::util::is_root() => match crate::encryption::password_set(&dev) {
+            Ok(true) => "yes, password on".to_string(),
+            Ok(false) => "yes, password off (opens by itself)".to_string(),
+            Err(_) => "yes".to_string(),
+        },
+        Ok(_) => "yes".to_string(),
+    };
+    println!("Encrypted:   {encryption}");
 
     let mut slots = Vec::new();
     // `if let ... && let ...` ("let chains"): both must match.

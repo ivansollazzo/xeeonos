@@ -12,7 +12,10 @@ white dialog windows ("Back" goes to the previous step):
   it;
 - the **computer name**;
 - the **first user**: full name, user name, password, and whether it is an
-  administrator (member of `wheel`, can use `sudo`).
+  administrator (member of `wheel`, can use `sudo`);
+- the **disk password**, only if it was chosen in the installer: the account
+  password or another one. The recovery key is shown once at the end
+  ([encryption.md](encryption.md)).
 
 Language, keyboard and time zone take effect as soon as they are chosen:
 after choosing the Italian keyboard, the next answer is already typed with
@@ -59,7 +62,9 @@ password=...
 admin=yes
 ```
 
-`keyboard`, `timezone`, `hostname`, `fullname` and `admin` are optional. CI
+`keyboard`, `timezone`, `hostname`, `fullname` and `admin` are optional.
+`encrypt=yes` turns the disk password on (with `disk_password=`, or the
+account password); the recovery key is printed on the console. CI
 uses this (`tools/boot-test.sh --setup <file>`).
 
 ## What is not in the image

@@ -1,10 +1,11 @@
 //! xctl - the XeeonOS system tool.
 //!
 //! Commands: `status`, `update`, `rollback`, `channel`, `packages`, `setup`,
-//! `install-system`, `recovery`, `network`. Each command lives in its own module (file) below.
+//! `install-system`, `recovery`, `network`, `encryption`. Each command lives in its own module (file) below.
 
 mod boot;
 mod channel;
+mod encryption;
 mod install;
 mod network;
 mod oci;
@@ -74,6 +75,7 @@ Commands:
                          partitions.
       --separate-boot    With --free-space: put the kernels in a new boot
                          partition, even if the EFI partition has room.
+      --encrypt          Ask for a disk password at the first start.
       --from <dir>       Install the version in <dir> instead of the one
                          on the installation medium.
       --yes              Do not ask for confirmation (for automated tests).
@@ -83,6 +85,12 @@ Commands:
       ethernet [--device <dev>] (--dhcp | --address <ip>/<prefix>
                --gateway <ip> [--dns <ip>,...])
       wifi <name> [--password <p>] [--dhcp | --address ... ]
+  encryption [status|on|off]
+                         The disk password of the data partition (always
+                         encrypted). on: a password at every start and a
+                         recovery key, shown once. off: no password.
+      --reencrypt        With on: also re-encrypt everything (slow).
+      --password-stdin   Read the password from standard input.
   recovery               Restart into Recovery (asks first). In Recovery,
                          show the Recovery menu: reinstall, previous version,
                          network, shell, erase everything, restart.
@@ -106,6 +114,12 @@ fn main() {
         "setup" => setup::run_setup(rest),
         "channel" => channel::run(rest),
         "network" => network::run_network(rest),
+        "encryption" => match rest.is_empty() {
+            true if ui::interactive() => {
+                util::need_root("encryption").and_then(|_| encryption::screen())
+            }
+            _ => encryption::run_encryption(rest),
+        },
         "help" | "-h" | "--help" => {
             println!("{USAGE}");
             Ok(())

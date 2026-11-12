@@ -115,7 +115,7 @@ jobs:
           retention-days: 3
 
   disk:
-    name: Test first boot, A/B update, rollback, setup and Recovery
+    name: Test first boot, A/B update, rollback, setup, Recovery, network, encryption
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -282,6 +282,21 @@ jobs:
             --expect "MANUAL-Wired .*10\.0\.2\.50/24" \
             --expect "DHCP-Wired .*10\.0\.2\.15/24" \
             out/disk.raw out/serial-10-network.log
+
+      # The data partition is always encrypted, with an empty password. Turn
+      # the disk password on (instant), then off again with the recovery key
+      # it printed; the next start must still need no password.
+      - name: "Test 11: disk encryption on and off"
+        run: |
+          tools/boot-test.sh \
+            --run "/bin/sh -c 'xctl status | grep Encrypted; printf test-disk-pw | xctl encryption on --password-stdin | tee /run/on.txt; xctl encryption status | sed s,^,AFTER-ON-,; grep -oE [a-z-]{71} /run/on.txt | head -n1 | xctl encryption off --password-stdin; xctl encryption status | sed s,^,AFTER-OFF-,'" \
+            --expect "Encrypted: +yes, password off" \
+            --expect "Recovery key" \
+            --expect "AFTER-ON-encryption: on" \
+            --expect "Encryption is off" \
+            --expect "AFTER-OFF-encryption: off" \
+            out/disk.raw out/serial-11a-encryption.log
+          tools/boot-test.sh out/disk.raw out/serial-11b-after-encryption.log
 
       - name: Upload boot logs
         if: always()

@@ -6,9 +6,13 @@
 //! administrator uses sudo). Everything it writes lives in /etc and /home on
 //! the data partition: the sealed /usr is never touched.
 //!
+//! If the disk password was chosen in the installer, the setup asks for it
+//! at the end (the account password is offered) and shows the recovery key.
+//!
 //! Unattended setup: the answers can be given as a file of `key=value` lines
 //! (keys: language, keyboard, timezone, hostname, user, fullname, password,
-//! admin), passed as the system credential `xeeonos.setup`.
+//! admin, encrypt, disk_password), passed as the system credential
+//! `xeeonos.setup`.
 
 use std::collections::HashMap;
 use std::fs;
@@ -21,6 +25,9 @@ use crate::util::{Result, err, need_root, run};
 
 /// Marks the setup as done; the service does not start again while it exists.
 const DONE: &str = "/var/lib/xeeonos/setup-done";
+/// Written by the installer when the disk password was chosen there, in the
+/// boot partition (the data partition does not exist yet at that time).
+pub const ENCRYPT_FLAG: &str = "EFI/xeeonos/encrypt";
 
 /// Languages offered in the menu: (locale, name, keyboard, time zone).
 /// Any other language can be typed as a locale name (e.g. nl_NL.UTF-8):
@@ -51,6 +58,8 @@ struct Answers {
     fullname: String,
     password: String,
     admin: bool,
+    /// Turn the disk password on, with this password.
+    disk_password: Option<String>,
 }
 
 pub fn run_setup(args: &[String]) -> Result<()> {
@@ -72,6 +81,11 @@ pub fn run_setup(args: &[String]) -> Result<()> {
         None => ask_all()?,
     };
     apply(&answers)?;
+    if let Some(pw) = &answers.disk_password {
+        let key = crate::encryption::turn_on(pw, false)?;
+        crate::encryption::show_recovery_key(&key)?;
+    }
+    let _ = fs::remove_file(crate::boot::esp().join(ENCRYPT_FLAG));
 
     fs::create_dir_all(Path::new(DONE).parent().unwrap_or(Path::new("/")))?;
     fs::write(DONE, "")?;
@@ -103,6 +117,13 @@ fn from_credential(text: &str) -> Result<Answers> {
         fullname: map.get("fullname").map_or(String::new(), |v| v.to_string()),
         password: get("password")?,
         admin: map.get("admin").is_none_or(|v| *v == "yes"),
+        disk_password: match map.get("encrypt") {
+            Some(&"yes") => Some(
+                map.get("disk_password")
+                    .map_or_else(|| get("password"), |v| Ok(v.to_string()))?,
+            ),
+            _ => None,
+        },
         language,
     };
     check_language(&answers.language)?;
@@ -142,7 +163,9 @@ fn ask_all() -> Result<Answers> {
         fullname: String::new(),
         password: String::new(),
         admin: true,
+        disk_password: None,
     };
+    let encrypt = crate::boot::esp().join(ENCRYPT_FLAG).exists();
     let mut step: usize = 0;
     loop {
         let forward = match step {
@@ -152,6 +175,7 @@ fn ask_all() -> Result<Answers> {
             3 => crate::network::screen()?,
             4 => ask_hostname(&mut a)?,
             5 => ask_account(&mut a)?,
+            6 if encrypt => ask_disk_password(&mut a)?,
             _ => return Ok(a),
         };
         if forward {
@@ -352,6 +376,30 @@ fn ask_account(a: &mut Answers) -> Result<bool> {
         false,
     )?;
     Ok(true)
+}
+
+/// The disk password, chosen in the installer: the account password, or
+/// another one.
+fn ask_disk_password(a: &mut Answers) -> Result<bool> {
+    let same = ui::yes_no(
+        "Disk password",
+        "You chose to protect this disk with a password, asked at every start \
+         before anything else.\n\nUse your account password for the disk too?\n\n\
+         (It is typed with the US keyboard layout at the start: letters and \
+         digits are in the same place as on most keyboards.)",
+        false,
+    )?;
+    if same {
+        a.disk_password = Some(a.password.clone());
+        return Ok(true);
+    }
+    match crate::encryption::ask_new_password("Disk password")? {
+        Some(pw) => {
+            a.disk_password = Some(pw);
+            Ok(true)
+        }
+        None => Ok(false),
+    }
 }
 
 /// The time zones of the world, from tzdata's zone1970.tab (one per region

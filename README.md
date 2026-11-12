@@ -98,6 +98,8 @@ computer name and the first user ([docs/setup.md](docs/setup.md)). The boot
 menu has a **Recovery** entry (also `sudo xctl recovery`) with a menu to
 reinstall, go back to the previous version, set up the network, open an
 administrator shell or erase everything ([docs/recovery.md](docs/recovery.md)).
+The data partition is always encrypted; a disk password can be turned on
+and off at any time ([docs/encryption.md](docs/encryption.md)).
 
 ## Arch Linux
 

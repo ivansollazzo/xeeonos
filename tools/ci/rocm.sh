@@ -29,8 +29,10 @@ cat > out/rocm-test.sh <<'SCRIPT'
 readlink -f /opt/rocm | sed s,^,OPT-,
 ldconfig -p | grep -q libamdhip64 && echo LIB-amdhip64
 ldconfig -p | grep -q libOpenCL && echo LIB-opencl
+ls /opt/rocm/bin | tr '\n' ' ' | sed s,^,BIN-,; echo
 command -v rocminfo | sed s,^,ROCMINFO-,
 command -v rocm-smi | sed s,^,SMI-,
+rocminfo 2>&1 | head -n 3 | sed s,^,RUN-,
 xctl status --check
 SCRIPT
 tools/boot-test.sh --credential rocm-test=out/rocm-test.sh \
@@ -56,6 +58,7 @@ check() { # <what> <path inside the extension, glob>
     if compgen -G "$mnt/$2" >/dev/null; then echo "ok: $1"; else echo "FAIL: $1 ($2 missing)" >&2; exit 1; fi
 }
 check hipcc 'usr/lib/xeeonos/opt/rocm/bin/hipcc'
+check "hipcc in PATH" 'usr/bin/hipcc'
 check "HIP headers" 'usr/lib/xeeonos/opt/rocm/include/hip/hip_runtime.h'
 check rocBLAS 'usr/lib/xeeonos/opt/rocm/lib/librocblas.so*'
 check rocFFT 'usr/lib/xeeonos/opt/rocm/lib/librocfft.so*'

@@ -14,6 +14,7 @@ own with "Re-run failed jobs".
 | `base.sh` | zram and swap file, systemd-oomd, firewall (closed, open/close a port), scheduled jobs, disk health, pstore, fwupd, `xctl report` | disk image |
 | `snapshots.sh` | take a data snapshot, change files, restore it from Recovery | disk image |
 | `desktop.sh` | KDE Plasma: login screen (SDDM on Wayland) after the setup, keyboard layout from the setup, Plasma session with sound | disk image |
+| `tools.sh` | containers without root for the user of the setup (podman, distrobox), SSH client, SSH server off | disk image |
 | `hibernate.sh` | hibernate into the swap file, start again: the session resumes | disk image |
 | `secureboot.sh` | Secure Boot (firmware without keys): keys enrolled, signed start, TPM unlock without password, signed update, another TPM asks the password | disk image, next version |
 | `encryption.sh` | disk password on and off (recovery key), then a normal start | disk image |

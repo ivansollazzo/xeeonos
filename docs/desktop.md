@@ -11,6 +11,8 @@ The published XeeonOS images have the KDE Plasma desktop (module
   **screens** and **power** (power profiles), all in System Settings. Sound
   (PipeWire) is the module `audio`, and Bluetooth is part of the core
   system, the same for every desktop;
+- **printers** in System Settings (module `printing`, see
+  [printing.md](printing.md));
 - the applications that must be part of the system: **Konsole** (terminal),
   **Dolphin** (files), **Spectacle** (screenshots), **System Monitor**
   (processes and resources) and **Ark** (archives). Every other application

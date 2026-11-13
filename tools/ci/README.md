@@ -16,6 +16,7 @@ own with "Re-run failed jobs".
 | `desktop.sh` | KDE Plasma: login screen (SDDM on Wayland) after the setup, keyboard layout from the setup, Plasma session with sound | disk image |
 | `tools.sh` | containers without root for the user of the setup (podman, distrobox), SSH client, SSH server off | disk image |
 | `flatpak.sh` | Flatpak: Flathub set up for the whole system and for the user, Discover with Flatpak support | disk image |
+| `printing.sh` | printing: CUPS on demand, add a printer, Avahi and `.local` names, Plasma's Printers page | disk image |
 | `hibernate.sh` | hibernate into the swap file, start again: the session resumes | disk image |
 | `secureboot.sh` | Secure Boot (firmware without keys): keys enrolled, signed start, TPM unlock without password, signed update, another TPM asks the password | disk image, next version |
 | `encryption.sh` | disk password on and off (recovery key), then a normal start | disk image |

@@ -1,0 +1,5 @@
+# CUPS starts on demand, at the first use of a printer.
+enable cups.socket
+# Finds the printers of the local network.
+enable avahi-daemon.service
+enable avahi-daemon.socket

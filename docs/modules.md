@@ -25,6 +25,7 @@ snapshot, output, tools tree) stay in the top-level `mkosi.conf`.
 | `live` | optional | Live ISO: UKI running from RAM, root autologin, installer tools; replaces `system` |
 | `audio` | optional | Sound for every desktop: PipeWire (PulseAudio, ALSA and JACK interfaces) |
 | `flatpak` | optional | Applications from Flathub, for the whole system (with `plasma`: Discover as app store), see [flatpak.md](flatpak.md) |
+| `printing` | optional | Printers: CUPS, driverless printing, network printers (with `plasma`: Printers page), see [printing.md](printing.md) |
 | `plasma` | optional | KDE Plasma desktop, minimal: Wayland session, SDDM login screen, network/Bluetooth/screens/power settings (sound settings with `audio`), Konsole, Dolphin, Spectacle, System Monitor, Ark (see [desktop.md](desktop.md)) |
 
 The initrd built into every kernel image is configured in the top-level
@@ -40,8 +41,8 @@ A variant is a set of optional modules on top of the core ones:
 | --- | --- |
 | Core (no desktop), installed system | `mkosi build` |
 | Live ISO | `mkosi --profile=live build` |
-| Desktop: what CI builds and publishes | `mkosi --profile=plasma,audio,flatpak build` |
-| Desktop, later | `mkosi --profile=plasma,audio,flatpak,xapp,printing build` |
+| Desktop: what CI builds and publishes | `mkosi --profile=plasma,audio,flatpak,printing build` |
+| Desktop, later | the same with `xapp` |
 
 ## Runtime modules
 

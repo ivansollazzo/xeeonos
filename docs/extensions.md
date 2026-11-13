@@ -44,6 +44,7 @@ Recovery always starts without extensions.
 | `printing` | included, special | Printers: CUPS, network printers, Printers page (see [printing.md](printing.md)) |
 | `docker` | optional | The Docker engine, Compose, Buildx; users of the group `docker` use it without sudo |
 | `rocm` | optional | AMD ROCm runtimes (HIP, OpenCL), see [rocm.md](rocm.md) |
+| `thinkpad-t14-amd-touchpad` | optional | Touchpad of the ThinkPad T14/P14s AMD and E495 over SMBus (patched kernel modules), see [thinkpad-t14-amd-touchpad.md](thinkpad-t14-amd-touchpad.md) |
 | `rocm-sdk` | optional | AMD ROCm SDK: `hipcc`, math libraries, headers (several GB), see [rocm.md](rocm.md) |
 
 ## Making one

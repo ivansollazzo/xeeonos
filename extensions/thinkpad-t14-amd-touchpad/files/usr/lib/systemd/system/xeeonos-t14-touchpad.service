@@ -1,0 +1,14 @@
+# Extension thinkpad-t14-amd-touchpad: use the patched modules even when the
+# stock ones were loaded before the extension arrived.
+[Unit]
+Description=Patched touchpad modules (ThinkPad T14/P14s AMD, E495)
+DefaultDependencies=no
+After=xeeonos-extensions.service systemd-udev-trigger.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/xeeonos/t14-touchpad-reload
+
+[Install]
+WantedBy=sysinit.target

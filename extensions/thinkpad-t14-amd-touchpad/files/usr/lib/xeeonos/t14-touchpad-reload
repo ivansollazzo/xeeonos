@@ -1,0 +1,15 @@
+#!/bin/sh
+# The extension arrives during the boot (xctl ext activate), when udev may
+# already have loaded the stock i2c-piix4 and psmouse: load the patched ones
+# instead. psmouse goes first and comes back last, so the touchpad and the
+# TrackPoint come back on the new transport.
+for m in i2c_piix4 psmouse rmi_smbus; do
+    if [ -e /sys/module/$m ] && ! grep -q O /sys/module/$m/taint 2>/dev/null; then
+        modprobe -r psmouse rmi_smbus 2>/dev/null
+        modprobe -r i2c_piix4 2>/dev/null || echo "i2c_piix4 is in use: the patched one loads at the next start"
+        break
+    fi
+done
+modprobe i2c_piix4 2>/dev/null
+modprobe psmouse 2>/dev/null
+exit 0

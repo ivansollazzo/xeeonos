@@ -17,11 +17,11 @@ One directory of files per version, built by CI with `tools/mkupdate.sh`:
 
 ## Where updates come from
 
-Every push to a channel branch publishes its update to the GitHub container
+Every push to `experimental` or `testing`, and every stable release, publishes its update to the GitHub container
 registry as an OCI artifact, readable without login:
 
-    ghcr.io/ivansollazzo/xeeonos:<version>   e.g. 0.1.0-experimental.42
-    ghcr.io/ivansollazzo/xeeonos:<channel>   e.g. experimental, 1.0-stable, 1.1-beta
+    ghcr.io/ivansollazzo/xeeonos:<version>   e.g. 26.11-experimental.42, 26.12.2
+    ghcr.io/ivansollazzo/xeeonos:<channel>   experimental, testing, stable
 
 Pull requests never publish.
 
@@ -35,7 +35,7 @@ xctl update --from /run/media/usb/update        # from a directory
 xctl update --from http://server/xeeonos/       # from a web directory
 xctl channel                     # show the channel
 xctl channel list                # the channels published on the registry
-sudo xctl channel set 1.1-beta   # switch channel (stored in /etc/xeeonos/channel)
+sudo xctl channel set testing    # switch channel (stored in /etc/xeeonos/channel)
 sudo xctl channel reset          # back to the channel of the running version
 ```
 
@@ -57,39 +57,40 @@ when a new version is available ([maintenance.md](maintenance.md)).
 ## Channels and versions
 
 The channel is the branch, with the same name everywhere (branch, `xctl
-channel`, registry tag):
+channel`, registry tag). Versions follow the month (YY.MM: 26.11, then 27.1
+in January):
 
 | Branch / channel | What | Versions |
 |---|---|---|
-| `experimental` | Free development, continuous builds | `0.1.0-experimental.42` |
-| `<major>.<minor>-alpha`, `-beta` | A release being prepared, e.g. `1.1-alpha`, `1.1-beta` | `1.1.0-beta.57` |
-| `<major>.<minor>-stable` | A release, e.g. `1.0-stable`: only its fixes | `1.0.0`, `1.0.1` |
+| `experimental` | Free development; every merge is published | `26.11-experimental.42` |
+| `testing` | What comes next: new features, new Arch snapshots; every merge is published | `26.12-testing.7` |
+| `stable` | Fixed versions; fixes come as backports from testing | `26.12.1`, `26.12.2`, `27.1.1` |
 
-Each minor version has its own branches, so the stable version and the one
-in development stay apart. A system on `1.0-stable` gets only the fixes of
-1.0; moving to 1.1 is a choice (`sudo xctl channel set 1.1-stable`).
-Updates only go forward: a channel whose versions are older than the
+`testing` and `stable` start after the experimental phase.
+
+**Stable versions are published by hand.** A merge into `stable` is built
+and tested (`26.12-rc.<n>`), never published. Actions → **Pubblica
+versione** → Run workflow (on `stable`), `.github/workflows/release.yml`:
+
+1. works out the number YY.MM.S: the month of today, S one more than the
+   last version of this month (tags `v26.12.*`); S grows at every release
+   (a new snapshot, something important, a backport);
+2. builds and runs every test (`build.yml`);
+3. only if all are green: publishes the signed update as `26.12.2` and on
+   the channel `stable`, and tags the commit `v26.12.2`. If anything is red,
+   nothing is published.
+
+**Arch snapshots are chosen by hand.** Actions → **Nuovo snapshot** → Run
+workflow (`.github/workflows/snapshot.yml`): a branch (testing, or
+experimental) and a date (empty: the newest). It opens a pull request with
+the Arch news and the packages that change; merge it when it is green.
+Nothing moves the snapshot by itself.
+
+**Extensions** fit exactly one version (`SYSEXT_LEVEL=<version>`, see
+[extensions.md](extensions.md)): every published version has its own.
+
+Updates only go forward: a channel whose newest version is older than the
 running one offers nothing until it passes it.
-
-To always have the newest version instead, choose a channel that follows
-it:
-
-| Channel | Follows |
-|---|---|
-| `stable` | the newest stable version |
-| `beta` | the newest beta, or a newer stable version |
-| `alpha` | the newest alpha, or a newer beta or stable version |
-
-At each update, xctl reads the list of channels on the registry (its tags)
-and takes the highest minor version with a stage the channel accepts; inside
-one minor version, the channel with the newest version (`1.1.0` is newer than
-`1.1.0-beta.9`). So a fix published on `1.1-beta` does not move `beta` back
-once `2.0-beta` exists. Nothing in CI moves these channels: they are worked
-out on each computer, and every update is still checked against the signing
-key. `xctl channel list` shows where each one is now.
-
-`mkosi.version` holds the base version, and on a release branch it must
-belong to it (`1.0.x` on `1.0-*`; `tools/version.sh` checks).
 
 ## Signing key
 

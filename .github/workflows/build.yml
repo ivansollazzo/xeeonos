@@ -1,18 +1,33 @@
 name: Build
 
-# Channel branches: `experimental` now, later `<major>.<minor>-alpha|beta|stable`
-# (e.g. 1.0-stable, 1.1-beta: the branch name is the channel, see tools/version.sh).
+# Branches = channels (tools/version.sh, docs/updates.md):
+# - experimental, testing: every push (merge) is built, tested and published
+#   (26.11-experimental.42, 26.12-testing.7);
+# - stable: a push is built and tested, never published; a stable version
+#   (YY.MM.S) is published only by the "Pubblica versione" workflow
+#   (release.yml), which calls this one with the version.
 # Pull requests build and test, but never publish anything.
 on:
   push:
-    branches: [experimental, '[0-9]*.[0-9]*-alpha', '[0-9]*.[0-9]*-beta', '[0-9]*.[0-9]*-stable']
+    branches: [experimental, testing, stable]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Stable version to build and publish (YY.MM.S)
+        type: string
+        required: true
+
+# The stable version, when called by release.yml (tools/version.sh reads it).
+env:
+  XEEONOS_VERSION: ${{ inputs.version }}
 
 # A new push to a pull request replaces its running checks.
+# A release (release.yml) has its own group and is never cancelled.
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  group: build-${{ github.ref }}${{ inputs.version && format('-{0}', inputs.version) || '' }}
+  cancel-in-progress: ${{ !inputs.version }}
 
 #   xctl -> build -> test (one job per feature, in parallel) -> publish
 #
@@ -302,7 +317,7 @@ jobs:
   publish:
     name: Publish update to ghcr.io
     needs: test
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || inputs.version != ''
     runs-on: ubuntu-24.04
     permissions:
       contents: read

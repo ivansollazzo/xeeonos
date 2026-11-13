@@ -655,8 +655,8 @@ mod tests {
 
     #[test]
     fn file_names() {
-        let file = update_file("0.1.0-alpha.7", "docker");
-        assert_eq!(file, "xeeonos_0.1.0-alpha.7.docker.xext");
+        let file = update_file("26.12-testing.7", "docker");
+        assert_eq!(file, "xeeonos_26.12-testing.7.docker.xext");
         assert_eq!(extension_of(&file), Some("docker"));
         assert_eq!(extension_of("xeeonos_0.1.0.usr-x86-64.abc.raw.zst"), None);
         assert_eq!(extension_of("xeeonos_0.1.0.efi"), None);

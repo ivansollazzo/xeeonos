@@ -1,50 +1,58 @@
 #!/usr/bin/env bash
-# Print the full XeeonOS version for this build.
+# Print the full XeeonOS version for this build (docs/updates.md).
 #
-# The base version lives in mkosi.version (e.g. 0.1.0). The channel is the
-# branch name: `experimental`, or a release branch `<major>.<minor>-<stage>`
-# (`1.0-stable`, `1.1-beta`, `1.2-alpha`): the same name for the branch, the
-# channel and the registry tag. Every other branch (pull requests, work
-# branches, local builds) is `dev`. The CI run number makes every build unique
-# and ordered:
+# Versions follow the month: YY.MM (26.11, then 27.1 in January). The branch
+# is the channel and the registry tag:
 #
-#   experimental -> 0.1.0-experimental.42
-#   1.1-beta     -> 1.1.0-beta.57
-#   1.0-stable   -> 1.0.0 (then 1.0.1, ...: set in mkosi.version)
-#   anything     -> 0.1.0-dev.0
+#   experimental -> 26.11-experimental.42   (every merge publishes one)
+#   testing      -> 26.11-testing.57        (every merge publishes one)
+#   stable       -> 26.11.2                 only from the "Pubblica versione"
+#                   workflow (release.yml), which sets XEEONOS_VERSION; a
+#                   merge into stable builds and tests 26.11-rc.<n>, which is
+#                   not published
+#   anything     -> 26.11-dev.0             (pull requests, local builds)
 #
-# On a release branch, mkosi.version must belong to it (1.0.x on 1.0-*).
+# The number at the end is the CI run number: every build is unique and
+# ordered. XEEONOS_MONTH (YY.MM) overrides the month, for tests.
 #
 # With --channel, print the channel instead (the registry tag that
-# `xctl update` follows): the branch name, or nothing for development builds.
+# `xctl update` follows): experimental, testing or stable, or nothing for
+# builds that are not published.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-base=$(< mkosi.version)
+month=${XEEONOS_MONTH:-$(date -u +%y.%-m)}
 branch=${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo dev)}}
 build=${GITHUB_RUN_NUMBER:-0}
+release=${XEEONOS_VERSION:-}
 
-stage=dev
-if [[ $branch == experimental ]]; then
-    stage=experimental
-elif [[ $branch =~ ^([0-9]+\.[0-9]+)-(alpha|beta|stable)$ ]]; then
-    stage=${BASH_REMATCH[2]}
-    if [[ $base != "${BASH_REMATCH[1]}".* ]]; then
-        echo "mkosi.version ($base) does not belong to the branch $branch" >&2
+if [[ -n $release ]]; then
+    if [[ ! $release =~ ^[0-9]{2}\.[0-9]{1,2}\.[0-9]+$ ]]; then
+        echo "XEEONOS_VERSION ($release) is not YY.MM.S" >&2
+        exit 1
+    fi
+    if [[ $branch != stable ]]; then
+        echo "a release version ($release) is built only from the stable branch, not $branch" >&2
         exit 1
     fi
 fi
 
+case $branch in
+    experimental | testing) stage=$branch ;;
+    stable) stage=${release:+release} ; stage=${stage:-rc} ;;
+    *) stage=dev ;;
+esac
+
 if [[ ${1:-} == --channel ]]; then
     case $stage in
-        dev) ;;
-        *) echo "$branch" ;;
+        experimental | testing) echo "$stage" ;;
+        release) echo stable ;;
     esac
     exit 0
 fi
 
-if [[ $stage == stable ]]; then
-    echo "$base"
+if [[ $stage == release ]]; then
+    echo "$release"
 else
-    echo "$base-$stage.$build"
+    echo "$month-$stage.$build"
 fi

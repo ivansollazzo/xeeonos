@@ -1,7 +1,8 @@
 //! XeeonOS versions and channels.
 //!
-//! A version looks like `0.1.0-experimental.42`, `1.2.0-beta.7` or `1.2.0`.
-//! The part after the first `-` names the channel it was built for.
+//! A version looks like `26.11-experimental.42`, `26.12-testing.7` or
+//! `26.12.2` (YY.MM.S, a stable release). The part after the first `-` names
+//! the channel it was built for.
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -30,94 +31,43 @@ pub fn parse_os_release(text: &str) -> HashMap<String, String> {
         .collect()
 }
 
-/// The channel a version belongs to, which is also its tag on the registry:
+/// The channels, which are also the branches and the tags on the registry:
+/// `experimental` (free development), `testing` (what comes next: new
+/// features, new Arch snapshots) and `stable` (fixed versions, published by
+/// hand).
+pub const CHANNELS: [&str; 3] = ["stable", "testing", "experimental"];
+
+/// The channel a version belongs to (its tag on the registry):
 ///
-/// | version                 | channel        |
-/// |-------------------------|----------------|
-/// | `0.1.0-experimental.42` | `experimental` |
-/// | `1.2.0-beta.7`          | `1.2-beta`     |
-/// | `1.2.3`                 | `1.2-stable`   |
-/// | `0.1.0-dev.8`           | none           |
+/// | version                  | channel        |
+/// |--------------------------|----------------|
+/// | `26.11-experimental.42`  | `experimental` |
+/// | `26.12-testing.7`        | `testing`      |
+/// | `26.12.2`                | `stable`       |
+/// | `26.11-dev.8`, `-rc.3`   | none           |
 ///
 /// `Option<String>` is Rust's way of saying "maybe a value": `Some(..)` or
-/// `None`. Development builds have no channel.
+/// `None`. Builds that are not published have no channel.
 pub fn channel_of(version: &str) -> Option<String> {
     let (number, rest) = match version.split_once('-') {
         Some((n, r)) => (n, Some(r)),
         None => (version, None),
     };
-    let mut parts = number.split('.');
-    let (major, minor) = (parts.next()?, parts.next()?);
-    if !is_number(major) || !is_number(minor) {
+    let parts: Vec<&str> = number.split('.').collect();
+    if parts.iter().any(|p| !is_number(p)) {
         return None;
     }
     match rest.map(|r| r.split('.').next().unwrap_or_default()) {
-        None => Some(format!("{major}.{minor}-stable")),
-        Some("experimental") => Some("experimental".to_string()),
-        Some(pre @ ("alpha" | "beta")) => Some(format!("{major}.{minor}-{pre}")),
+        // YY.MM.S
+        None if parts.len() == 3 => Some("stable".to_string()),
+        Some(stage @ ("experimental" | "testing")) if parts.len() == 2 => Some(stage.to_string()),
         _ => None,
     }
 }
 
-/// Is `name` a channel users can choose? `experimental`, or a release
-/// channel `<major>.<minor>-alpha|beta|stable` (e.g. `1.0-stable`): the
-/// same name as its branch and its tag on the registry.
+/// Is `name` a channel users can choose?
 pub fn is_valid_channel(name: &str) -> bool {
-    if name == "experimental" {
-        return true;
-    }
-    let Some((number, stage)) = name.split_once('-') else {
-        return false;
-    };
-    let Some((major, minor)) = number.split_once('.') else {
-        return false;
-    };
-    is_number(major) && is_number(minor) && matches!(stage, "alpha" | "beta" | "stable")
-}
-
-/// The channels that follow the newest version instead of one minor
-/// version: `stable` (the newest stable), `beta` (the newest beta, or a
-/// newer stable), `alpha` (the newest alpha, or a newer beta or stable).
-pub const FOLLOWING: [&str; 3] = ["stable", "beta", "alpha"];
-
-/// The stages a following channel accepts, from the most stable.
-fn stages_for(following: &str) -> &'static [&'static str] {
-    match following {
-        "stable" => &["stable"],
-        "beta" => &["stable", "beta"],
-        "alpha" => &["stable", "beta", "alpha"],
-        _ => &[],
-    }
-}
-
-/// Where a following channel can go, among the `published` channels: those
-/// of the highest minor version with a stage it accepts (e.g. for `beta`,
-/// with 1.1-stable, 2.0-beta and 2.1-alpha published: 2.0-beta). A newer
-/// minor version is always newer, whatever its stage; inside one minor
-/// version the caller compares the versions the channels have.
-pub fn candidates(following: &str, published: &[String]) -> Vec<String> {
-    let stages = stages_for(following);
-    let parsed: Vec<((u64, u64), &String)> = published
-        .iter()
-        .filter(|c| c.as_str() != "experimental" && is_valid_channel(c))
-        .filter_map(|c| {
-            let (number, stage) = c.split_once('-')?;
-            let (major, minor) = number.split_once('.')?;
-            stages
-                .contains(&stage)
-                .then_some(((major.parse().ok()?, minor.parse().ok()?), c))
-        })
-        .collect();
-    let Some(top) = parsed.iter().map(|(n, _)| *n).max() else {
-        return Vec::new();
-    };
-    let mut out: Vec<String> = parsed
-        .into_iter()
-        .filter(|(n, _)| *n == top)
-        .map(|(_, c)| c.clone())
-        .collect();
-    out.sort();
-    out
+    CHANNELS.contains(&name)
 }
 
 fn is_number(s: &str) -> bool {
@@ -196,66 +146,27 @@ mod tests {
     #[test]
     fn channels() {
         assert_eq!(
-            channel_of("0.1.0-experimental.42").as_deref(),
+            channel_of("26.11-experimental.42").as_deref(),
             Some("experimental")
         );
-        assert_eq!(channel_of("1.2.0-beta.7").as_deref(), Some("1.2-beta"));
-        assert_eq!(channel_of("1.2.0-alpha.3").as_deref(), Some("1.2-alpha"));
-        assert_eq!(channel_of("1.2.3").as_deref(), Some("1.2-stable"));
-        assert_eq!(channel_of("1.0.0").as_deref(), Some("1.0-stable"));
-        assert_eq!(channel_of("0.1.0-dev.8"), None);
+        assert_eq!(channel_of("26.12-testing.7").as_deref(), Some("testing"));
+        assert_eq!(channel_of("26.12.2").as_deref(), Some("stable"));
+        assert_eq!(channel_of("27.1.1").as_deref(), Some("stable"));
+        assert_eq!(channel_of("26.11-dev.8"), None);
+        assert_eq!(channel_of("26.11-rc.3"), None);
+        assert_eq!(channel_of("26.12"), None);
+        assert_eq!(channel_of("26.12.1-testing.3"), None);
         assert_eq!(channel_of("unknown"), None);
     }
 
     #[test]
     fn valid_channels() {
-        for ok in ["experimental", "1.0-beta", "12.3-stable", "0.1-alpha"] {
+        for ok in ["experimental", "testing", "stable"] {
             assert!(is_valid_channel(ok), "{ok}");
         }
-        for bad in [
-            "",
-            "beta",
-            "x-beta",
-            "1.x-beta",
-            "1-beta",
-            "1.0-gamma",
-            "1.0-beta/../",
-            "a.0-beta",
-            "1.0.0-stable",
-        ] {
+        for bad in ["", "beta", "1.0-stable", "stable/../", "Stable"] {
             assert!(!is_valid_channel(bad), "{bad}");
         }
-    }
-
-    #[test]
-    fn following() {
-        let published: Vec<String> = [
-            "experimental",
-            "0.1.0-experimental.58",
-            "1.0-stable",
-            "1.1-stable",
-            "1.1-beta",
-            "2.0-beta",
-            "2.1-alpha",
-            "1.0.0",
-        ]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-        assert_eq!(candidates("stable", &published), vec!["1.1-stable"]);
-        assert_eq!(candidates("beta", &published), vec!["2.0-beta"]);
-        assert_eq!(candidates("alpha", &published), vec!["2.1-alpha"]);
-        // Same minor version: both, the caller compares their versions.
-        let published = vec!["2.0-beta".to_string(), "2.0-stable".to_string()];
-        assert_eq!(
-            candidates("beta", &published),
-            vec!["2.0-beta", "2.0-stable"]
-        );
-        assert!(candidates("stable", &["experimental".to_string()]).is_empty());
-        assert!(candidates("other", &published).is_empty());
-        // 10.0 is newer than 9.9 (numbers, not text).
-        let published = vec!["9.9-stable".to_string(), "10.0-stable".to_string()];
-        assert_eq!(candidates("stable", &published), vec!["10.0-stable"]);
     }
 
     #[test]
@@ -272,6 +183,9 @@ mod tests {
         assert_eq!(compare("0.1.0-dev.8", "0.1.0-dev.8.1"), Less);
         assert_eq!(compare("1.10.0", "1.9.9"), Greater);
         assert_eq!(compare("2.0.0", "10.0.0"), Less);
+        assert_eq!(compare("26.12.10", "26.12.9"), Greater);
+        assert_eq!(compare("27.1.1", "26.12.3"), Greater);
+        assert_eq!(compare("26.12-testing.3", "26.11-testing.40"), Greater);
         // A release is newer than its pre-releases, older than the next ones.
         assert_eq!(compare("1.1.0", "1.1.0-beta.5"), Greater);
         assert_eq!(compare("1.1.0-alpha.9", "1.1.0-beta.1"), Less);

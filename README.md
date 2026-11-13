@@ -11,26 +11,26 @@ XeeonOS is an image-based Linux distribution based on the packages of
 
 ## Branches
 
-The channel is the branch name:
+The channel is the branch name (see [docs/updates.md](docs/updates.md)):
 
 | Branch | Channel | Version example |
 | --- | --- | --- |
-| `experimental` | Free experimentation, continuous builds | `0.1.0-experimental.42` |
-| `<major>.<minor>-alpha`, `-beta`, `-stable` (later), e.g. `1.0-stable`, `1.1-beta` | Releases, one set of branches per minor version | `1.1.0-beta.57`, `1.0.0` |
-
-On top of these, the channels `stable`, `beta` and `alpha` follow the newest
-version (`xctl channel list`, see [docs/updates.md](docs/updates.md)).
+| `experimental` | Free experimentation, every merge published | `26.11-experimental.42` |
+| `testing` (later) | What comes next: new features, new Arch snapshots; every merge published | `26.12-testing.7` |
+| `stable` (later) | Fixed versions, published by hand ("Pubblica versione") | `26.12.1`, `26.12.2` |
 
 Changes enter a branch only through a pull request with green CI; work branches
 are deleted after merge. CI builds everything once, then runs one test job per
-feature in parallel ([tools/ci/](tools/ci/README.md)). The base version lives in `mkosi.version`;
-`tools/version.sh` adds the channel and the CI run number.
+feature in parallel ([tools/ci/](tools/ci/README.md)). `tools/version.sh`
+makes the version: the month (YY.MM), the channel and the CI run number, or
+the stable number YY.MM.S.
 
 ## Modules
 
 XeeonOS is assembled from independent modules: core modules in `mkosi.conf.d/`
 are always included, optional ones in `mkosi.profiles/` are picked with
 `mkosi --profile=...`. See [docs/modules.md](docs/modules.md).
+How to keep working on it (in Italian): [docs/handoff.md](docs/handoff.md).
 
 ## Building
 
@@ -42,14 +42,14 @@ tree, so you can build from any Linux distribution.
 mkosi --force --profile=plasma,audio build   # sealed disk image with the KDE Plasma desktop:
                                              # mkosi.output/xeeonos_<version>.raw
                                              # (without --profile: no desktop, text console only)
-tools/boot-test.sh mkosi.output/xeeonos_0.1.0.raw   # first boot in QEMU + `xctl status --check`
+tools/boot-test.sh mkosi.output/xeeonos_26.11-dev.0.raw   # first boot in QEMU + `xctl status --check`
 ```
 
 To produce the live ISO (needs `dosfstools`, `mtools`, `xorriso`):
 
 ```sh
 mkosi --force --profile=live build   # mkosi.output/xeeonos_<version>.efi
-tools/mkiso.sh mkosi.output/xeeonos_0.1.0.efi xeeonos.iso
+tools/mkiso.sh mkosi.output/xeeonos_26.11-dev.0.efi xeeonos.iso
 tools/boot-test.sh xeeonos.iso       # optional: boot it in QEMU
 ```
 

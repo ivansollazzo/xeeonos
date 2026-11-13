@@ -12,7 +12,7 @@ need them: it has its own previous version ([rollback.md](rollback.md)).
     sudo xctl snapshots restore <name>      # Recovery only
 
 Names are `<date>_<time>-<reason>`, for example
-`2026-11-12_101500-before-0.1.0-experimental.60`.
+`2026-11-12_101500-before-26.11-experimental.60`.
 
 ## Restoring
 

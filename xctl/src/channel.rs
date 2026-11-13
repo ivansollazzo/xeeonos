@@ -1,25 +1,20 @@
 //! `xctl channel`: which stream of updates this system follows.
 //!
-//! The channels are the tags on the registry: `experimental`, and one
-//! channel per minor version and stage (`1.0-stable`, `1.1-beta`,
-//! `2.0-alpha`). On top of them, `stable`, `beta` and `alpha` follow the
-//! newest version (see `version::FOLLOWING`): xctl works out at each update
-//! which channel that is now.
+//! The channels are the tags on the registry, and the branches they are
+//! built from: `stable` (fixed versions YY.MM.S, published by hand),
+//! `testing` (what comes next) and `experimental` (free development).
 //!
 //! By default a system follows the channel its version was built for. The
 //! administrator can choose another one; the choice is stored in
 //! /etc/xeeonos/channel (admin configuration, kept across updates).
 
-use std::cmp::Ordering;
 use std::fs;
 use std::path::Path;
 
 use crate::config;
 use crate::oci;
 use crate::util::{Result, err, need_root};
-use crate::version::{
-    FOLLOWING, candidates, channel_of, compare, is_valid_channel, read_os_release,
-};
+use crate::version::{CHANNELS, channel_of, is_valid_channel, read_os_release};
 
 /// The channel this system follows, if any (development builds have none).
 pub fn current() -> Result<Option<String>> {
@@ -33,79 +28,31 @@ pub fn current() -> Result<Option<String>> {
     Ok(os.get("IMAGE_VERSION").and_then(|v| channel_of(v)))
 }
 
-/// The tag to download for `channel`: the channel itself, or for a
-/// following channel (`stable`, `beta`, `alpha`) the channel it is on now.
+/// The tag to download for `channel`: the channel itself.
 pub fn resolve(channel: &str) -> Result<String> {
-    if !FOLLOWING.contains(&channel) {
-        return Ok(channel.to_string());
+    if !is_valid_channel(channel) {
+        return Err(err(format!(
+            "unknown channel '{channel}' (see xctl channel list; reset with sudo xctl channel reset)"
+        )));
     }
-    resolve_following(channel, &published()?)
+    Ok(channel.to_string())
 }
 
-fn resolve_following(following: &str, published: &[String]) -> Result<String> {
-    let mut best: Option<(String, String)> = None; // (channel, version)
-    for c in candidates(following, published) {
-        // Inside one minor version, the channel with the newest version
-        // (e.g. 2.0-stable once 2.0.0 is out, if 2.0-beta is still 2.0.0-beta.9).
-        let artifact = oci::Artifact::open(&format!("{}:{c}", config::REGISTRY))?;
-        let Some(version) = artifact
-            .file_names()
-            .iter()
-            .filter_map(|n| n.strip_prefix("xeeonos_")?.strip_suffix(".efi"))
-            .map(str::to_string)
-            .max_by(|a, b| compare(a, b))
-        else {
-            continue;
-        };
-        if best
-            .as_ref()
-            .is_none_or(|(_, v)| compare(&version, v) == Ordering::Greater)
-        {
-            best = Some((c, version));
-        }
-    }
-    best.map(|(c, _)| c).ok_or_else(|| {
-        err(format!(
-            "no version is published yet for the {following} channel"
-        ))
-    })
-}
-
-/// The channels published on the registry (its tags that are channels, not
-/// exact versions).
+/// The channels with a version published on the registry.
 fn published() -> Result<Vec<String>> {
-    let mut channels: Vec<String> = oci::tags(config::REGISTRY)?
-        .into_iter()
-        .filter(|t| is_valid_channel(t))
-        .collect();
-    channels.sort_by_key(|c| std::cmp::Reverse(order(c)));
-    Ok(channels)
+    let tags = oci::tags(config::REGISTRY)?;
+    Ok(CHANNELS
+        .iter()
+        .filter(|c| tags.iter().any(|t| t == *c))
+        .map(|c| c.to_string())
+        .collect())
 }
 
-/// Sort key: newest minor version first, and inside one the most stable
-/// first; experimental last.
-fn order(channel: &str) -> (u64, u64, u8) {
-    let Some((number, stage)) = channel.split_once('-') else {
-        return (0, 0, 0);
-    };
-    let (major, minor) = number.split_once('.').unwrap_or_default();
-    let rank = match stage {
-        "stable" => 3,
-        "beta" => 2,
-        _ => 1,
-    };
-    (
-        major.parse().unwrap_or_default(),
-        minor.parse().unwrap_or_default(),
-        rank,
-    )
-}
-
-fn describe_following(name: &str) -> &'static str {
-    match name {
-        "stable" => "the newest stable version",
-        "beta" => "the newest beta, or a newer stable version",
-        _ => "the newest alpha, or a newer beta or stable version",
+fn describe(channel: &str) -> &'static str {
+    match channel {
+        "stable" => "fixed versions (YY.MM.S)",
+        "testing" => "what comes next: new features and Arch snapshots",
+        _ => "free development, may break",
     }
 }
 
@@ -115,9 +62,7 @@ pub fn run(args: &[String]) -> Result<()> {
         None => {
             let channel = current()?;
             match channel.as_deref() {
-                Some(f) if FOLLOWING.contains(&f) => {
-                    println!("{f} (follows {})", describe_following(f))
-                }
+                Some(c) if is_valid_channel(c) => println!("{c} ({})", describe(c)),
                 _ => println!("{}", shown(channel)),
             }
         }
@@ -144,28 +89,22 @@ pub fn run(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// `xctl channel list`: the channels on the registry, the current one marked.
+/// `xctl channel list`: the channels, the current one marked.
 fn list() -> Result<()> {
     let current = current()?;
     let published = published()?;
-    let mark = |c: &str| {
-        if current.as_deref() == Some(c) {
+    for c in CHANNELS {
+        let mark = if current.as_deref() == Some(c) {
             "*"
         } else {
             " "
-        }
-    };
-    println!("Following the newest version:");
-    for f in FOLLOWING {
-        let now = match resolve_following(f, &published) {
-            Ok(c) => format!("now {c}"),
-            Err(_) => "nothing published yet".into(),
         };
-        println!("{} {f:<14}{} ({now})", mark(f), describe_following(f));
-    }
-    println!("Channels:");
-    for c in &published {
-        println!("{} {c}", mark(c));
+        let state = if published.iter().any(|p| p == c) {
+            ""
+        } else {
+            " (nothing published yet)"
+        };
+        println!("{mark} {c:<14}{}{state}", describe(c));
     }
     println!("Switch with: sudo xctl channel set <channel>");
     Ok(())
@@ -174,18 +113,12 @@ fn list() -> Result<()> {
 /// `xctl channel set <name>`: only a channel that exists on the registry.
 fn set(name: &str) -> Result<()> {
     need_root("channel set")?;
-    if !FOLLOWING.contains(&name) && !is_valid_channel(name) {
+    if !is_valid_channel(name) {
         return Err(err(format!(
             "unknown channel '{name}' (see xctl channel list)"
         )));
     }
-    let published = published()?;
-    let exists = if FOLLOWING.contains(&name) {
-        !candidates(name, &published).is_empty()
-    } else {
-        published.iter().any(|c| c == name)
-    };
-    if !exists {
+    if !published()?.iter().any(|c| c == name) {
         return Err(err(format!(
             "the channel '{name}' has no version published (see xctl channel list)"
         )));
@@ -194,31 +127,4 @@ fn set(name: &str) -> Result<()> {
     fs::write(config::CHANNEL_FILE, format!("{name}\n"))?;
     println!("Channel: {name} (takes effect at the next xctl update)");
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sort_order() {
-        let mut c = vec![
-            "experimental",
-            "1.0-stable",
-            "2.0-alpha",
-            "1.1-beta",
-            "1.1-stable",
-        ];
-        c.sort_by_key(|c| std::cmp::Reverse(order(c)));
-        assert_eq!(
-            c,
-            vec![
-                "2.0-alpha",
-                "1.1-stable",
-                "1.1-beta",
-                "1.0-stable",
-                "experimental"
-            ]
-        );
-    }
 }

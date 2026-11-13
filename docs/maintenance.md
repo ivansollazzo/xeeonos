@@ -62,17 +62,17 @@ Attach it to the [bug report](https://github.com/ivansollazzo/xeeonos/issues).
 
 ## Arch snapshot
 
-`.github/workflows/snapshot.yml`, started by hand for now (Actions → Arch
-snapshot → Run workflow; how often it runs by itself is still to decide),
-opens (or updates) one pull
-request that moves `Snapshot=` in `mkosi.conf` to the newest Arch Linux
-Archive date. Its description lists the Arch news published since the
-current snapshot and the packages of XeeonOS that change
-(`tools/snapshot-report.py`); when there is news or a new major version of
-an important package (kernel series, systemd, glibc, ...), it is opened as a
-draft, to read first. Arch supports only whole upgrades, so a week that
-looks risky is skipped by leaving the pull request open: the next run moves
-it to a newer date. It needs the repository secret `XEEONOS_BOT_TOKEN` (a
-fine-grained token for this repository with Contents and Pull requests
+The snapshot is chosen by hand, nothing moves it by itself: Actions → **Nuovo
+snapshot** → Run workflow (`.github/workflows/snapshot.yml`), with the
+branch (`testing`, where new snapshots go, or `experimental`) and a date
+(YYYY/MM/DD, or empty for the newest complete one). It opens (or updates)
+one pull request that moves `Snapshot=` in `mkosi.conf`. Its description
+lists the Arch news published since the current snapshot and the packages
+of XeeonOS that change (`tools/snapshot-report.py`); when there is news or a
+new major version of an important package (kernel series, systemd, glibc,
+...), it is opened as a draft, to read first. Arch supports only whole
+upgrades: if a snapshot looks risky, do not merge, and run the workflow
+again with another date. It needs the repository secret
+`XEEONOS_BOT_TOKEN` (a fine-grained token with Contents and Pull requests
 read/write), because pull requests opened with the workflow's own token do
 not start the CI.

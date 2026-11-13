@@ -1,0 +1,9 @@
+# The containers of the .xapp applications for this user (xctl app sync
+# --user): at login, and whenever the monitor (xeeonos-xapps.path) sees a
+# change in /var/lib/xapps.
+[Unit]
+Description=Containers of the .xapp applications
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/xctl app sync --user --settle

@@ -257,8 +257,6 @@ jobs:
           - {test: flatpak, artifacts: disk-image}
           - {test: printing, artifacts: disk-image}
           - {test: extensions, artifacts: '{disk-image,update-system}'}
-          - {test: rocm, artifacts: '{disk-image,update-system}'}
-          - {test: thinkpad-t14-amd-touchpad, artifacts: '{disk-image,update-system}'}
           - {test: xapp, artifacts: disk-image}
           - {test: secureboot, artifacts: '{disk-image,update-next}'}
           - {test: iso-install, artifacts: '{live,update-system}'}

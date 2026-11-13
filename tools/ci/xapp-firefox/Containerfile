@@ -1,0 +1,16 @@
+# Firefox as an .xapp (the test application of tools/ci/xapp.sh; recipes
+# live in the xeeonos-applications repository). Arch Linux from a snapshot
+# of the Arch Linux Archive, Firefox, and what distrobox needs inside a
+# container: with all of it already there, the first start needs no network.
+FROM docker.io/library/archlinux:base
+ARG SNAPSHOT
+RUN echo "Server = https://archive.archlinux.org/repos/$SNAPSHOT/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist \
+ && sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 8/' /etc/pacman.conf \
+ && pacman -Syuu --noconfirm --needed \
+      bash bc bzip2 coreutils curl diffutils findutils gnupg inetutils iputils \
+      less lsof man-db ncurses pigz pinentry procps-ng rsync openssh shadow \
+      sudo time tree unzip util-linux wget xorg-xauth zip vte-common \
+      mesa vulkan-intel vulkan-radeon libva-mesa-driver \
+      firefox noto-fonts \
+ && pacman -Scc --noconfirm \
+ && rm -rf /var/cache/pacman/pkg/* /var/lib/pacman/sync/*

@@ -11,6 +11,8 @@ printf '%s\n' language=en_US.UTF-8 hostname=xeeonos-ci user=test \
 cat > out/xapp-test.sh <<'SCRIPT'
 # systemd.run= replaces the boot target: start what a normal boot starts.
 systemctl start network-online.target xeeonos-xapps.path
+# ~/Applications comes from the user's tmpfiles at login (the user manager).
+systemctl start user@$(id -u test).service
 readlink /home/test/Applications | sed s,^,LINK-,
 su - test -c 'curl -sSf http://10.0.2.2:8080/Firefox.xapp.tar.zst -o /tmp/Firefox.xapp.tar.zst && xctl app install /tmp/Firefox.xapp.tar.zst'
 su - test -c 'xctl app list' | sed s,^,LIST-,

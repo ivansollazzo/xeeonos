@@ -17,12 +17,9 @@ name: Arch snapshot
 # the workflow's own token would not start the CI.) Without it, the workflow
 # only says what it would do.
 #
-# It runs every Monday (and by hand): one snapshot move per week, tested
-# and merged like any other change (docs/maintenance.md).
+# For now it runs only by hand: XeeonOS stays on the current snapshot until
+# we choose how often to move (daily or weekly: add a `schedule:` here).
 on:
-  schedule:
-    # Monday 05:00 UTC.
-    - cron: '0 5 * * 1'
   workflow_dispatch:
 
 permissions:

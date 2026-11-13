@@ -16,8 +16,9 @@ giorno, la prima alpha, cosa resta da fare.
   aggiornamenti.
 - **Desktop** (fase 3): Plasma su Wayland con SDDM, audio PipeWire,
   Bluetooth; modulo `tools` (podman, distrobox, SSH spento); estensioni di
-  sistema (`xctl ext`: flatpak e printing incluse, docker, rocm, rocm-sdk,
-  touchpad T14 opzionali); `.xapp` sperimentale con Firefox.
+  sistema (`xctl ext`: flatpak e printing incluse, docker opzionale; rocm,
+  rocm-sdk e touchpad T14 passano al repository `xeeonos-extensions`);
+  `.xapp` sperimentali, ognuna un container pronto (prova: Firefox).
 
 Ogni cosa ha la sua pagina in `docs/` (in inglese): `modules.md` è l'indice
 dei moduli, `extensions.md` delle estensioni.
@@ -31,8 +32,10 @@ dei moduli, `extensions.md` delle estensioni.
 3. Se un test fallisce: apri il job, leggi la fine del log (la console della
    macchina virtuale è copiata lì; i log completi sono negli artifact
    `serial-logs-<test>`). Correggi e fai push: la CI riparte.
-   - Se hai cambiato solo test o documentazione dopo un run **fallito**, la CI
-     riusa le immagini e rifà solo i test (molto più veloce).
+   - Se hai cambiato solo test o documentazione dopo un run **fallito o
+     annullato**, la CI riusa le immagini e rifà solo i test (molto più
+     veloce). Un push annulla il run in corso: correggi appena capisci il
+     problema, senza aspettare gli altri test.
    - Un test che fallisce per caso: "Re-run failed jobs", una volta sola.
 4. Tutto verde: "Ready for review" → "Merge pull request" → "Confirm merge" →
    "Delete branch".
@@ -47,37 +50,34 @@ protection" (Settings → Rules → Rulesets).
 Per provare a mano un'immagine: scarica l'artifact `disk-image` o
 `xeeonos-iso` del run e avviala in una macchina virtuale UEFI.
 
-## Aggiornamento di Arch ogni settimana
+## Snapshot di Arch
 
-Ogni lunedì `.github/workflows/snapshot.yml` apre (o aggiorna) la pull
-request "Arch snapshot <data>", con le notizie di Arch e i pacchetti che
-cambiano. Se è in bozza, leggi le notizie prima. Se la CI è verde, uniscila;
-se la settimana sembra rischiosa, lasciala aperta: il lunedì dopo passa a una
-data più nuova.
+Lo snapshot lo scegli tu: Actions → "Arch snapshot" → "Run workflow".
+`.github/workflows/snapshot.yml` apre (o aggiorna) la pull request "Arch
+snapshot <data>", con le notizie di Arch e i pacchetti che cambiano. Se è in
+bozza, leggi le notizie prima. Se la CI è verde, uniscila. Non c'è nessun
+aggiornamento automatico settimanale o mensile.
 
 Serve una volta sola il secret `XEEONOS_BOT_TOKEN`: GitHub → il tuo avatar →
 Settings → Developer settings → Fine-grained tokens → Generate new token;
-solo il repository xeeonos; permessi "Contents" e "Pull requests" in
-lettura e scrittura. Poi nel repository: Settings → Secrets and variables →
-Actions → New repository secret, nome `XEEONOS_BOT_TOKEN`. Senza, il
-workflow dice solo cosa farebbe.
+i repository xeeonos e xeeonos-extensions; permessi "Contents" e "Pull
+requests" in lettura e scrittura. Poi nel repository: Settings → Secrets and
+variables → Actions → New repository secret, nome `XEEONOS_BOT_TOKEN`.
+Senza, il workflow dice solo cosa farebbe.
 
-## La prima alpha (0.1-alpha)
+## Versioni e canali (in arrivo, prossima PR)
 
-Quando `experimental` è come la vuoi:
-
-1. Su GitHub, nel menu dei rami, scrivi `0.1-alpha` e scegli "Create branch
-   0.1-alpha from experimental".
-2. La CI parte da sola e, se è verde, pubblica il canale `0.1-alpha`
-   (versioni `0.1.0-alpha.<n>`). La ruleset protegge già i rami `*-alpha`.
-3. Un sistema passa all'alpha con `sudo xctl channel set 0.1-alpha` (o
-   `alpha`, che segue sempre l'alpha più nuova), poi `sudo xctl update`.
-4. Correzioni: pull request verso `0.1-alpha` (e la stessa correzione verso
-   `experimental`, se serve anche lì).
-5. Più avanti: `0.1-beta`, poi `0.1-stable` (in `mkosi.version` resta
-   `0.1.0`; la stable usa il numero esatto, quindi le correzioni dopo
-   diventano `0.1.1`, `0.1.2`...). Per la 0.2: cambia `mkosi.version` in
-   `0.2.0` su `experimental`.
+- Per ora c'è solo `experimental`. Dopo la sperimentazione: `testing` (si
+  può fare di tutto, nuovi snapshot) e `stable` (fisso, solo backport).
+- `testing`: ogni merge pubblica `26.12-testing.<n>`.
+- `stable`: i merge non pubblicano. Pubblichi tu con il click "Pubblica
+  versione": numero `YY.MM.S` (26.12.1, 26.12.2, a gennaio 27.1.1), build,
+  tutti i test, pubblicazione firmata, canale stable, tag `v26.12.1`. Se
+  qualcosa è rosso non esce niente.
+- "Nuovo snapshot": un click che apre la pull request verso `testing`.
+- Estensioni: compatibili esattamente con una versione. A ogni build
+  pubblicata, `xeeonos-extensions` apre da solo la sua pull request e la
+  unisce se è verde (anche per stable).
 
 ## Le chiavi
 
@@ -93,15 +93,16 @@ Quando `experimental` è come la vuoi:
 In ordine di importanza:
 
 1. Prova su hardware vero: installazione, aggiornamento dal vivo, Secure
-   Boot, TPM, sospensione, Wi-Fi, il touchpad del T14 con l'estensione.
+   Boot, TPM, sospensione, Wi-Fi, il touchpad del T14 con l'estensione
+   (da `xeeonos-extensions`).
 2. Backup della chiave di firma fuori dal PC.
-3. `.xapp`: firma dei pacchetti, isolamento (sandbox), un repository di app,
-   il formato definitivo; oggi è sperimentale.
+3. `.xapp`: firma, isolamento (sandbox), le ricette nel repository
+   `xeeonos-applications`, una finestra di avanzamento; oggi è sperimentale.
 4. Flatpak preinstallati (al primo avvio o nella ISO): da decidere.
 5. Installatore grafico in Qt (oggi `xctl install-system` testuale).
 6. Logo e grafica (schermata di avvio, sfondo, SDDM).
-7. Estensioni nuove: una cartella in `extensions/` (vedi
-   `docs/extensions.md`, "Making one").
+7. Estensioni nuove: nel repository `xeeonos-extensions` (le incluse,
+   flatpak e printing, restano in `extensions/` qui).
 
 ## Idee e decisioni prese (da non rimettere in discussione senza motivo)
 
@@ -109,7 +110,8 @@ In ordine di importanza:
   tre tentativi; niente pacman nell'immagine.
 - Solo GPU Intel, AMD e Nouveau.
 - NetworkManager; Btrfs su LUKS2 sempre (password spenta = chiave vuota).
-- App: native minime, Flatpak per il resto, `.xapp` in `/var/lib/xapps`.
+- App: native minime, Flatpak per il resto, `.xapp` in `/var/lib/xapps`
+  (ognuna un container, sempre in distrobox, uno per app).
 - Estensioni: incluse (nell'immagine, Special) o opzionali (scaricate,
   firmate) o da file (non verificate, con avviso).
 - Nessuna compatibilità all'indietro necessaria finché si installa da zero.

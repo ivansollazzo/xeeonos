@@ -341,8 +341,20 @@ pub fn store(dir: &Path, version: &str, name: &str) -> Result<()> {
     }
     // Written under another name first: a half-written image is never used.
     let partial = image.with_extension("partial");
-    fs::copy(dir.join(update_file(version, name)), &partial)?;
+    copy_image(&dir.join(update_file(version, name)), &partial)?;
     fs::rename(&partial, &image)?;
+    Ok(())
+}
+
+/// Copy an extension image. Some are several GB (rocm-sdk): on Btrfs the
+/// copy shares the blocks of the original (reflink), so the download and
+/// its stored copy do not take the space twice.
+fn copy_image(from: &Path, to: &Path) -> Result<()> {
+    let _ = fs::remove_file(to);
+    let (from_s, to_s) = (from.to_string_lossy(), to.to_string_lossy());
+    if run_program("cp", &["--reflink=auto", "--", &from_s, &to_s]).is_err() {
+        fs::copy(from, to)?;
+    }
     Ok(())
 }
 
@@ -464,7 +476,7 @@ fn install(args: &[String]) -> Result<()> {
     fs::create_dir_all(dir)?;
     let image = dir.join(format!("{name}.xext"));
     let partial = image.with_extension("partial");
-    fs::copy(&file, &partial)?;
+    copy_image(Path::new(&file), &partial)?;
     fs::rename(&partial, &image)?;
     fs::write(dir.join(format!("{name}.conf")), manifest_text(&ext))?;
     set_choice(name, true)?;

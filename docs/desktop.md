@@ -25,7 +25,7 @@ the first user's desktop (`/etc/X11/xorg.conf.d/00-keyboard.conf` and
 
 ## Settings
 
-- The login screen: `/usr/lib/sddm/sddm.conf.d/10-xeeonos.conf`; a file in
+- The login screen: `/usr/lib/sddm/sddm.conf.d/xeeonos.conf`; a file in
   `/etc/sddm.conf.d/` overrides it (for example automatic login:
   `[Autologin]` `User=<name>` `Session=plasma`).
 - Like everything in `/usr`, the desktop changes only with `xctl update`.

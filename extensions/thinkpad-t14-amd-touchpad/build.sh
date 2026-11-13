@@ -17,8 +17,11 @@ sha256=2a657f916d99019c4febb5ab0b704ef7d0ac4bf59d26cb539ac0710c5a82d859
 url=https://github.com/orospakr/thinkpad-t14-amd-touchpad/archive/refs/tags/v$version.tar.gz
 
 # The kernel of the system (same snapshot, same version), its headers and
-# the tools to build, in the container.
-pacman --config /tmp/pacman.conf --cachedir /cache --noconfirm --needed -Sy \
+# the tools to build, in the container. The container's own packages are
+# newer than the snapshot: -Syuu first brings all of them to the snapshot
+# (downgrading), otherwise the snapshot's gcc or kernel cannot be installed
+# next to them ("could not satisfy dependencies").
+pacman --config /tmp/pacman.conf --cachedir /cache --noconfirm --needed -Syuu \
     linux linux-headers gcc make patch zstd kmod curl >/dev/null
 kver=$(ls /usr/lib/modules | grep -- '-arch' | head -n1)
 [[ -d /usr/lib/modules/$kver/build ]] || { echo "no headers for $kver" >&2; exit 1; }

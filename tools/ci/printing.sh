@@ -7,7 +7,7 @@ fresh_disk
 printf '%s\n' language=en_US.UTF-8 hostname=xeeonos-ci user=test \
     "fullname=Test User" password=test-password admin=yes > out/setup.txt
 cat > out/printing-test.sh <<'SCRIPT'
-# Started by the extension at boot (xctl ext activate), and pulled in by
+# Started by the extension at boot (xctl extensions activate), and pulled in by
 # sockets.target through the link the extension carries in /usr.
 systemctl is-active cups.socket | sed s,^,SOCKET-,
 test -L /usr/lib/systemd/system/sockets.target.wants/cups.socket && echo WANTS-link

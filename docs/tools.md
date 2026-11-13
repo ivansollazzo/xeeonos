@@ -11,16 +11,12 @@ The server is installed but off, and the firewall is closed. To reach this
 computer from another one:
 
 ```
-sudo systemctl enable --now sshd
-sudo xctl firewall allow 22/tcp
+sudo xctl ssh-server on      # starts sshd (also at every boot) and opens 22/tcp
+xctl ssh-server              # on or off?
+sudo xctl ssh-server off     # stops it and closes the port again
 ```
 
-and to turn it off again:
-
-```
-sudo systemctl disable --now sshd
-sudo xctl firewall deny 22/tcp
-```
+The service and the firewall port always go together.
 
 Its settings and keys are in `/etc/ssh` (kept across updates).
 
@@ -44,12 +40,12 @@ containers, in your home directory. podman and distrobox are optional
 extensions ([xeeonos-extensions](https://github.com/ivansollazzo/xeeonos-extensions)):
 
 ```
-sudo xctl ext enable distrobox     # brings podman with it
+sudo xctl extensions enable distrobox     # brings podman with it
 distrobox create --name dev --image archlinux:latest
 distrobox enter dev
 ```
 
-- **podman** (`sudo xctl ext enable podman` alone) runs the containers,
+- **podman** (`sudo xctl extensions enable podman` alone) runs the containers,
   without root: each user has their own, in `~/.local/share/containers`.
 - **distrobox** makes a container feel like the system: same home
   directory, same user, graphical applications included.
@@ -61,5 +57,6 @@ on needs nothing else.
 ## Tests
 
 `tools/ci/tools.sh`: the user created by the setup has ID ranges for
-containers; the SSH client is there; the SSH server is off; FUSE 2 is there
+containers; the SSH client is there; the SSH server is off, and
+`xctl ssh-server on|off` turns it and its port on and off; FUSE 2 is there
 for AppImage files.

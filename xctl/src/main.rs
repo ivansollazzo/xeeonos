@@ -19,6 +19,7 @@ mod report;
 mod secureboot;
 mod setup;
 mod snapshots;
+mod ssh;
 mod status;
 mod ui;
 mod update;
@@ -48,7 +49,7 @@ mod config {
     /// The channel chosen by the administrator, if any.
     pub const CHANNEL_FILE: &str = "/etc/xeeonos/channel";
     pub const OS_RELEASE: &str = "/usr/lib/os-release";
-    /// System extensions (xctl ext): what this version knows (<name>.conf)
+    /// System extensions (xctl extensions): what this version knows (<name>.conf)
     /// and the images included in the system image (<name>.xext).
     pub const EXTENSIONS: &str = "/usr/lib/xeeonos/extensions";
     /// Downloaded extensions: <version>/<name>.xext and <name>.conf.
@@ -60,6 +61,8 @@ mod config {
     /// Where systemd-sysext looks for the extensions to lay over /usr.
     pub const EXTENSIONS_RUN: &str = "/run/extensions";
     pub const EXTENSIONS_CACHE: &str = "/var/cache/xctl/ext";
+    /// One empty file per extension whose Setup= script has run.
+    pub const EXTENSIONS_SETUP: &str = "/var/lib/xeeonos/extensions-setup";
     /// Present only in the live ISO (mkosi.profiles/live).
     pub const LIVE_MARKER: &str = "/usr/lib/xeeonos/live";
     /// Kernel command line word of the Recovery boot entry.
@@ -97,20 +100,26 @@ Commands:
                          next), experimental (free development).
   channel set <name>     Switch to the channel <name> (only one that exists).
   channel reset          Go back to the channel this version was built for.
-  ext [list]             List the system extensions: software added on top of
-                         the sealed system (see docs/extensions.md).
-  ext enable <name>      Turn an extension on (an optional one is downloaded
+  extensions [list]      List the system extensions (software added on top
+                         of the sealed system, see docs/extensions.md): the
+                         installed ones, and those that can be downloaded
+                         for this version (needs the network).
+  extensions enable <name>
+                         Turn an extension on (an optional one is downloaded
                          first), from the next restart.
       --from <source>    Download it from <source> instead of the registry
                          (a directory, an http(s) URL, or oci://...).
       --keyring <file>   Also accept the keys in <file>.
-  ext disable <name> [--yes]
+  extensions disable <name> [--yes]
                          Turn an extension off, from the next restart. A
                          special one asks first.
-  ext install <file> [--yes]
+  extensions install <file> [--yes]
                          Install an extension image from a file (not signed,
                          not verified: asks first).
-  ext remove <name>      Turn an optional extension off and delete it.
+  extensions remove <name>
+                         Turn an optional extension off and delete it.
+  ssh-server [on|off]    Show, or turn on or off, the SSH server (and open or
+                         close its port, 22/tcp, in the firewall).
   packages [<name>]      List the packages of this version (and their
                          versions); with <name>, only those containing it.
   setup                  First-boot setup: language, keyboard, time zone,
@@ -183,9 +192,10 @@ fn main() {
         "recovery" => recovery::run_recovery(rest),
         "setup" => setup::run_setup(rest),
         "channel" => channel::run(rest),
-        "ext" => ext::run(rest),
+        "extensions" => ext::run(rest),
         "network" => network::run_network(rest),
         "firewall" => firewall::run_firewall(rest),
+        "ssh-server" => ssh::run_ssh_server(rest),
         "snapshots" => snapshots::run_snapshots(rest),
         "health" => health::run_health(rest),
         "report" => report::run_report(rest),

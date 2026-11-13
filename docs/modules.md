@@ -44,6 +44,6 @@ A variant is a set of optional modules on top of the core ones:
 ## Extensions
 
 Software on top of the sealed system, turned on and off after installation
-with `xctl ext`: `flatpak` and `printing` (included); the optional ones come from xeeonos-extensions. See
+with `xctl extensions`: `flatpak` and `printing` (included); the optional ones come from xeeonos-extensions. See
 [extensions.md](extensions.md). The desktop is not one of them: it is part of
 the tested image of its variant.

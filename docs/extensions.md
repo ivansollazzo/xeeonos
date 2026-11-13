@@ -16,7 +16,13 @@ sudo xctl extensions remove docker        # turn off and delete
 sudo xctl extensions install my.xext      # from a file: not verified, asks first
 ```
 
-Changes take effect at the next restart.
+Changes take effect **at once**, without restarting: the extensions are
+laid over `/usr` again (`systemd-sysext refresh`), and the extension's
+services start or stop and its hooks run in the running system. Two
+exceptions wait for the next restart: an extension with `Live=no` (one that
+brings kernel modules, which cannot be swapped in a running system) and any
+change made with `--no-apply` (enable, disable, install). Programs already
+running from an extension that is turned off keep running until they exit.
 
 `xctl extensions list` shows two sections: **Installed** (included,
 downloaded, from a file) and **Can be downloaded** for the running version.
@@ -72,11 +78,15 @@ the same way. One directory per extension in `extensions/<name>/`:
     - `Disable=`, units of the system stopped and masked while it is on
       (masked for the current boot only, in `/run`: turned off, it leaves
       nothing behind);
-    - `Setup=`, a script run once, at the first boot with it on;
+    - `Setup=`, a script run once, when it is first turned on (at once, or
+      at the next boot);
     - `Cleanup=`, a script run when it is turned off or removed (only if
       its `Setup=` ran), to undo what `Setup=` did; turned on again,
       `Setup=` runs again;
-    - `Boot=`, a script run at every boot with it on.
+    - `Boot=`, a script run at every boot with it on (and when it is
+      turned on);
+  - `Live=no` for an extension that brings kernel modules: turning it on
+    or off waits for the next restart.
 
     The scripts are file names in `files/usr/lib/xeeonos/extensions/<name>/`
     (executable), run as root with `XEEONOS_EXTENSION=<name>`; a failing

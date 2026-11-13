@@ -38,6 +38,13 @@
 //!             Setup ran), to undo what Setup did
 //!   Boot=     a script run at every boot with the extension on
 //!
+//! Turning one on or off takes effect at once: the extensions are laid over
+//! /usr again (systemd-sysext refresh), its services start or stop and its
+//! hooks run, in the running system. Except an extension with `Live=no`
+//! (one that brings kernel modules, which cannot be swapped in a running
+//! system): that one, and every change made with `--no-apply`, waits for
+//! the next restart.
+//!
 //! The scripts are in the extension image, in
 //! /usr/lib/xeeonos/extensions/<name>/, and run as root. The
 //! system image holds the manifests of the included ones
@@ -54,7 +61,7 @@ use crate::util::{Result, err, need_root, output, run as run_program};
 use crate::version::read_os_release;
 
 /// One extension, as described by its `.conf` file.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Extension {
     pub name: String,
     pub description: String,
@@ -72,8 +79,29 @@ pub struct Extension {
     pub setup: Option<String>,
     pub cleanup: Option<String>,
     pub boot: Option<String>,
+    /// Can be laid over /usr and taken away in the running system (Live=,
+    /// default yes; no for kernel modules).
+    pub live: bool,
     /// Installed from a file by the administrator (`xctl extensions install`).
     pub local: bool,
+}
+
+impl Default for Extension {
+    fn default() -> Self {
+        Extension {
+            name: String::new(),
+            description: String::new(),
+            special: false,
+            default: false,
+            units: Vec::new(),
+            masks: Vec::new(),
+            setup: None,
+            cleanup: None,
+            boot: None,
+            live: true,
+            local: false,
+        }
+    }
 }
 
 impl Extension {
@@ -124,6 +152,7 @@ fn parse(name: &str, text: &str) -> Extension {
             "Setup" => ext.setup = script(value),
             "Cleanup" => ext.cleanup = script(value),
             "Boot" => ext.boot = script(value),
+            "Live" => ext.live = value != "no",
             _ => {}
         }
     }
@@ -427,14 +456,14 @@ fn active_now() -> Vec<String> {
     names
 }
 
-/// `xctl extensions enable <name> [--from <source>] [--keyring <file>]`
+/// `xctl extensions enable <name> [--from <source>] [--keyring <file>] [--no-apply]`
 fn enable(args: &[String]) -> Result<()> {
     // The name first, then the options.
     let (name, options) = match args.split_first() {
         Some((name, rest)) if !name.starts_with('-') => (Some(name.clone()), rest),
         _ => (None, args),
     };
-    let (from, keyrings, _) = source_options(options, &[])?;
+    let (from, keyrings, no_apply) = source_options(options, &["--no-apply"])?;
     let name =
         name.ok_or_else(|| err("usage: xctl extensions enable <name> (see xctl extensions list)"))?;
     need_root("extensions enable")?;
@@ -454,8 +483,26 @@ fn enable(args: &[String]) -> Result<()> {
         download(&ext, &version, &source, &keyrings)?;
     }
     set_choice(&name, true)?;
-    println!("Extension {name}: on, from the next restart.");
+    // Downloaded just now: its manifest is known from here on.
+    let ext = find(&name)?;
+    let state = turned_on(&ext, &version, no_apply)?;
+    println!("Extension {name}: {state}.");
     Ok(())
+}
+
+/// Lay `ext`, just turned on, over the running system if it can be; what
+/// that means, for the message.
+fn turned_on(ext: &Extension, version: &str, no_apply: bool) -> Result<&'static str> {
+    Ok(if active_now().contains(&ext.name) {
+        "on"
+    } else if no_apply {
+        "on, from the next restart"
+    } else if !ext.live {
+        "on, from the next restart (it brings kernel modules: restart to use it)"
+    } else {
+        apply_on(ext, version)?;
+        "on"
+    })
 }
 
 /// Where the optional extensions for `version` are published.
@@ -547,13 +594,15 @@ pub fn prune(keep: &[String]) {
     }
 }
 
-/// `xctl extensions disable <name> [--yes]`
+/// `xctl extensions disable <name> [--yes] [--no-apply]`
 fn disable(args: &[String]) -> Result<()> {
     let mut name = None;
     let mut yes = false;
+    let mut no_apply = false;
     for arg in args {
         match arg.as_str() {
             "--yes" => yes = true,
+            "--no-apply" => no_apply = true,
             other if name.is_none() && !other.starts_with('-') => name = Some(other.to_string()),
             other => {
                 return Err(err(format!(
@@ -592,9 +641,29 @@ fn disable(args: &[String]) -> Result<()> {
         }
     }
     set_choice(&name, false)?;
-    clean_up(&ext);
-    println!("Extension {name}: off, from the next restart.");
+    turned_off(&ext, no_apply);
+    println!("Extension {name}: {}.", off_state(&ext, no_apply));
     Ok(())
+}
+
+/// Take `ext` away from the running system, if it is laid over /usr and
+/// can be (otherwise only its Cleanup runs, and it stays until the restart).
+fn turned_off(ext: &Extension, no_apply: bool) {
+    if active_now().contains(&ext.name) && ext.live && !no_apply {
+        apply_off(ext);
+    } else {
+        clean_up(ext);
+    }
+}
+
+fn off_state(ext: &Extension, no_apply: bool) -> &'static str {
+    if !active_now().contains(&ext.name) {
+        "off"
+    } else if no_apply || ext.live {
+        "off, from the next restart"
+    } else {
+        "off, from the next restart (it brings kernel modules)"
+    }
 }
 
 /// `xctl extensions install <file> [--yes]`: an extension image from a file. Nobody
@@ -602,9 +671,11 @@ fn disable(args: &[String]) -> Result<()> {
 fn install(args: &[String]) -> Result<()> {
     let mut file = None;
     let mut yes = false;
+    let mut no_apply = false;
     for arg in args {
         match arg.as_str() {
             "--yes" => yes = true,
+            "--no-apply" => no_apply = true,
             other if file.is_none() && !other.starts_with('-') => file = Some(PathBuf::from(other)),
             other => {
                 return Err(err(format!(
@@ -613,7 +684,8 @@ fn install(args: &[String]) -> Result<()> {
             }
         }
     }
-    let file = file.ok_or_else(|| err("usage: xctl extensions install <file.xext> [--yes]"))?;
+    let file =
+        file.ok_or_else(|| err("usage: xctl extensions install <file.xext> [--yes] [--no-apply]"))?;
     need_root("extensions install")?;
     if !file.is_file() {
         return Err(err(format!("{} is not a file", file.display())));
@@ -665,7 +737,11 @@ fn install(args: &[String]) -> Result<()> {
     fs::rename(&partial, &image)?;
     fs::write(dir.join(format!("{name}.conf")), manifest_text(&ext))?;
     set_choice(name, true)?;
-    println!("Extension {name}: installed; on, from the next restart.");
+    let name = name.clone();
+    let mut ext = ext;
+    ext.local = true;
+    let state = turned_on(&ext, &running_version()?, no_apply)?;
+    println!("Extension {name}: installed; {state}.");
     Ok(())
 }
 
@@ -712,6 +788,9 @@ fn manifest_text(ext: &Extension) -> String {
         ext.units.join(" "),
         ext.masks.join(" ")
     );
+    if !ext.live {
+        text.push_str("Live=no\n");
+    }
     for (key, value) in [
         ("Setup", &ext.setup),
         ("Cleanup", &ext.cleanup),
@@ -736,7 +815,7 @@ fn remove(args: &[String]) -> Result<()> {
     need_root("extensions remove")?;
     let ext = find(name)?;
     if ext.included_image().is_none() {
-        clean_up(&ext);
+        turned_off(&ext, false);
     }
     if ext.local {
         let dir = Path::new(config::EXTENSIONS_LOCAL);
@@ -756,7 +835,11 @@ fn remove(args: &[String]) -> Result<()> {
         }
     }
     set_choice(name, false)?;
-    println!("Extension {name}: removed (in use until the next restart).");
+    if active_now().contains(name) {
+        println!("Extension {name}: removed (in use until the next restart).");
+    } else {
+        println!("Extension {name}: removed.");
+    }
     Ok(())
 }
 
@@ -767,11 +850,8 @@ fn activate() -> Result<()> {
     need_root("extensions activate")?;
     let version = running_version()?;
     let choices = choices();
-    let run = Path::new(config::EXTENSIONS_RUN);
-    let mut units = Vec::new();
     let mut active = Vec::new();
     let mut local = Vec::new();
-    let mut hooked = Vec::new();
     for ext in known() {
         if !is_on(&ext, &choices) {
             continue;
@@ -784,16 +864,11 @@ fn activate() -> Result<()> {
             );
             continue;
         };
-        fs::create_dir_all(run)?;
-        let link = run.join(format!("{}.raw", ext.name));
-        let _ = fs::remove_file(&link);
-        std::os::unix::fs::symlink(&image, &link)?;
+        link(&ext.name, &image)?;
         if ext.local {
-            local.push((ext.name.clone(), link, ext.units.clone()));
+            local.push(ext.name.clone());
         }
-        units.extend(ext.units.iter().cloned());
-        active.push(ext.name.clone());
-        hooked.push(ext);
+        active.push(ext);
     }
     if active.is_empty() {
         return Ok(());
@@ -804,26 +879,111 @@ fn activate() -> Result<()> {
         if local.is_empty() {
             return Err(err("systemd-sysext could not lay the extensions over /usr"));
         }
-        for (name, link, its_units) in &local {
+        for name in &local {
             println!("Extension {name} (from a file): left out, the extensions did not fit.");
-            let _ = fs::remove_file(link);
-            active.retain(|a| a != name);
-            units.retain(|u| !its_units.contains(u));
+            unlink(name);
         }
+        active.retain(|e| !local.contains(&e.name));
         if active.is_empty() {
             return Ok(());
         }
-        hooked.retain(|e| active.contains(&e.name));
         run_program("systemd-sysext", &["refresh"])?;
     }
-    // Users and groups of the extensions (the boot's own run came before).
+    after_refresh()?;
+    bring_in(&active)?;
+    let names: Vec<&str> = active.iter().map(|e| e.name.as_str()).collect();
+    println!("Extensions: {}", names.join(", "));
+    Ok(())
+}
+
+/// Turn `ext` on in the running system: lay it over /usr with the others
+/// already there, then do what a boot does for it.
+fn apply_on(ext: &Extension, version: &str) -> Result<()> {
+    let image = ext.image(version).ok_or_else(|| {
+        err(format!(
+            "the extension {} is not on this computer for XeeonOS {version}",
+            ext.name
+        ))
+    })?;
+    link(&ext.name, &image)?;
+    if run_program("systemd-sysext", &["refresh"]).is_err() {
+        // Back to how it was.
+        unlink(&ext.name);
+        let _ = run_program("systemd-sysext", &["refresh"]);
+        return Err(err(format!(
+            "the extension {} does not fit this system (made for another version of XeeonOS?)",
+            ext.name
+        )));
+    }
+    after_refresh()?;
+    bring_in(std::slice::from_ref(ext))
+}
+
+/// Turn `ext` off in the running system: stop its services, give back the
+/// units it masked, run its Cleanup, and take it away from /usr.
+fn apply_off(ext: &Extension) {
+    if !ext.units.is_empty() {
+        let mut args = vec!["stop"];
+        args.extend(ext.units.iter().map(String::as_str));
+        let _ = run_program("systemctl", &args);
+    }
+    clean_up(ext);
+    unlink(&ext.name);
+    if run_program("systemd-sysext", &["refresh"]).is_err() {
+        println!(
+            "Extension {}: could not be taken away now; gone after the next restart",
+            ext.name
+        );
+    }
+    let _ = after_refresh();
+    if !ext.masks.is_empty() {
+        let mut args = vec!["unmask", "--runtime"];
+        args.extend(ext.masks.iter().map(String::as_str));
+        let _ = run_program("systemctl", &args);
+        // What was masked and normally runs starts again.
+        let again: Vec<&str> = ext
+            .masks
+            .iter()
+            .map(String::as_str)
+            .filter(|unit| {
+                output("systemctl", &["is-enabled", unit])
+                    .is_ok_and(|state| matches!(state.trim(), "enabled" | "static"))
+            })
+            .collect();
+        if !again.is_empty() {
+            let mut args = vec!["start", "--no-block"];
+            args.extend(again);
+            let _ = run_program("systemctl", &args);
+        }
+    }
+}
+
+/// /run/extensions/<name>.raw -> its image: what systemd-sysext lays over /usr.
+fn link(name: &str, image: &Path) -> Result<()> {
+    let run = Path::new(config::EXTENSIONS_RUN);
+    fs::create_dir_all(run)?;
+    let link = run.join(format!("{name}.raw"));
+    let _ = fs::remove_file(&link);
+    std::os::unix::fs::symlink(image, &link)?;
+    Ok(())
+}
+
+fn unlink(name: &str) {
+    let _ = fs::remove_file(Path::new(config::EXTENSIONS_RUN).join(format!("{name}.raw")));
+}
+
+/// After /usr changed: users and groups, device rules and units of the
+/// extensions now there (or no longer).
+fn after_refresh() -> Result<()> {
     run_program("systemd-sysusers", &[])?;
     let _ = run_program("udevadm", &["control", "--reload"]);
-    // systemd read its units before the extensions were there.
-    run_program("systemctl", &["daemon-reload"])?;
-    // Disable=: units of the system that must not run next to it, masked
-    // for this boot only (/run).
-    let masks: Vec<&str> = hooked
+    run_program("systemctl", &["daemon-reload"])
+}
+
+/// The hooks and services of extensions just laid over /usr: Disable=
+/// (masked for this boot only, in /run), Setup= (once), Boot=, Enable=.
+fn bring_in(exts: &[Extension]) -> Result<()> {
+    let masks: Vec<&str> = exts
         .iter()
         .flat_map(|e| e.masks.iter().map(String::as_str))
         .collect();
@@ -834,7 +994,7 @@ fn activate() -> Result<()> {
             println!("Extensions: could not mask {}", masks.join(" "));
         }
     }
-    for ext in &hooked {
+    for ext in exts {
         // Setup=: once (until the extension is turned off).
         if let Some(script) = &ext.setup {
             let marker = setup_marker(&ext.name);
@@ -844,17 +1004,20 @@ fn activate() -> Result<()> {
                 println!("Extension {}: set up", ext.name);
             }
         }
-        // Boot=: every boot.
+        // Boot=: every boot (and when it is turned on).
         if let Some(script) = &ext.boot {
             run_hook(&ext.name, "Boot", script);
         }
     }
+    let units: Vec<&str> = exts
+        .iter()
+        .flat_map(|e| e.units.iter().map(String::as_str))
+        .collect();
     if !units.is_empty() {
         let mut args = vec!["start", "--no-block"];
-        args.extend(units.iter().map(String::as_str));
+        args.extend(units.iter());
         run_program("systemctl", &args)?;
     }
-    println!("Extensions: {}", active.join(", "));
     Ok(())
 }
 
@@ -890,8 +1053,8 @@ fn run_hook(name: &str, kind: &str, script: &str) -> bool {
 }
 
 /// What an extension does when it is turned off or removed: run its Cleanup
-/// script, if its Setup ran. The script is still there: the extension stays
-/// laid over /usr until the next restart.
+/// script, if its Setup ran (while the extension, and so the script, is
+/// still laid over /usr).
 fn clean_up(ext: &Extension) {
     let marker = setup_marker(&ext.name);
     if !marker.exists() {
@@ -936,6 +1099,11 @@ mod tests {
         assert_eq!(ext.units, vec!["docker.socket", "containerd.service"]);
         let ext = parse("flatpak", "Special=yes\nDefault=yes\n");
         assert!(ext.special && ext.default && ext.units.is_empty());
+        // Live by default; not one that brings kernel modules.
+        assert!(ext.live);
+        let ext = parse("touchpad", "Live=no\n");
+        assert!(!ext.live);
+        assert!(!parse("touchpad", &manifest_text(&ext)).live);
     }
 
     #[test]

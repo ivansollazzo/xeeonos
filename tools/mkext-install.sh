@@ -1,15 +1,16 @@
 #!/bin/bash
 # The part of tools/mkext.sh that runs as root inside an Arch Linux
-# container: for every extension, install its packages into
-# /work/tree/<name> and turn the result into what lives under /usr.
+# container: install the packages of one extension into /work/tree/<name>
+# and turn the result into what lives under /usr.
 #
-#   /src   the repository (read-only)
-#   /work  pkgdb.tar (the system's package database), cache/ (downloaded
-#          packages), tree/ (the result)
+#   /src    the repository (read-only)
+#   /work   pkgdb.tar (the system's package database), tree/ (the result)
+#   /cache  downloaded packages
 #
-# Usage: mkext-install.sh <Arch snapshot, YYYY/MM/DD>
+# Usage: mkext-install.sh <Arch snapshot, YYYY/MM/DD> <extension>
 set -euo pipefail
 snapshot=${1:?snapshot missing}
+only=${2:?extension missing}
 
 mkdir -p /tmp/nohooks
 cat > /tmp/pacman.conf <<CONF
@@ -34,11 +35,11 @@ pacman-key --init >/dev/null
 pacman-key --populate archlinux >/dev/null
 
 rm -rf /work/tree
-for conf in /src/extensions/*/extension.conf; do
+for conf in /src/extensions/"$only"/extension.conf; do
     dir=$(dirname "$conf")
     name=$(basename "$dir")
     root=/work/tree/$name
-    Packages="" Enable="" KeepDevelopment=no
+    Packages="" Enable="" KeepDevelopment=no Reinstall=""
     # shellcheck disable=SC1090
     source "$conf"
     echo "::group::Extension $name: $Packages"
@@ -49,8 +50,15 @@ for conf in /src/extensions/*/extension.conf; do
     if [[ -n $Packages ]]; then
         # shellcheck disable=SC2086
         pacman --config /tmp/pacman.conf --root "$root" --dbpath "$root/var/lib/pacman" \
-            --cachedir /work/cache --gpgdir /etc/pacman.d/gnupg \
+            --cachedir /cache --gpgdir /etc/pacman.d/gnupg \
             --noconfirm --noscriptlet --needed -Sy $Packages
+    fi
+    # Packages of the system, installed again whole (their headers).
+    if [[ -n $Reinstall ]]; then
+        # shellcheck disable=SC2086
+        pacman --config /tmp/pacman.conf --root "$root" --dbpath "$root/var/lib/pacman" \
+            --cachedir /cache --gpgdir /etc/pacman.d/gnupg \
+            --noconfirm --noscriptlet -Sy $Reinstall
     fi
     rm -rf "$root/var/lib/pacman" "$root/var/cache/pacman" "$root/var/log/pacman.log"
 

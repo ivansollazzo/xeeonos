@@ -7,7 +7,8 @@
 # package database of the system image (written by the system build as
 # xeeonos_<version>.pkgdb.tar), so pacman installs exactly what the system
 # does not already have, from the same Arch snapshot. pacman runs in an Arch
-# Linux container (tools/mkext-install.sh); the result is packed here as a
+# Linux container (tools/mkext-install.sh), one extension at a time; the
+# result is packed here as a
 # read-only erofs image for systemd-sysext, a .xext file.
 #
 #   Default=yes   "included" extension: <bundled dir>/<name>.xext, which the
@@ -35,21 +36,21 @@ mkdir -p "$bundled" "$update"
 
 snapshot=$(sed -n 's/^Snapshot=//p' mkosi.conf)
 work=${MKEXT_WORK:-$PWD/mkext.work}
-mkdir -p "$work/cache"
+# Downloaded packages: kept between runs with the system's (same snapshot).
+cache=${MKEXT_CACHE:-$work/cache}
+mkdir -p "$work" "$cache"
 cp "$pkgdb" "$work/pkgdb.tar"
 
-# 1. Install: one tree per extension in $work/tree/<name>.
-# (apparmor=unconfined: the CI runner has no AppArmor tools, which docker
-# would need to load its default profile.)
-docker run --rm --security-opt apparmor=unconfined \
-    --volume "$PWD:/src:ro" --volume "$work:/work" \
-    "${MKEXT_IMAGE:-archlinux:base}" \
-    /bin/bash /src/tools/mkext-install.sh "$snapshot"
-
-# 2. Pack.
+# One extension at a time (some are several GB): install, pack, clean up.
 for conf in extensions/*/extension.conf; do
     name=$(basename "$(dirname "$conf")")
     tree=$work/tree/$name
+    # (apparmor=unconfined: the CI runner has no AppArmor tools, which
+    # docker would need to load its default profile.)
+    docker run --rm --security-opt apparmor=unconfined \
+        --volume "$PWD:/src:ro" --volume "$work:/work" --volume "$(realpath "$cache"):/cache" \
+        "${MKEXT_IMAGE:-archlinux:base}" \
+        /bin/bash /src/tools/mkext-install.sh "$snapshot" "$name"
     Default=no
     # shellcheck disable=SC1090
     source "$conf"
@@ -70,5 +71,5 @@ for conf in extensions/*/extension.conf; do
         sudo chown "$(id -u):$(id -g)" "$xext"
         ls -lh "$xext"
     fi
+    sudo rm -rf "$work/tree"
 done
-sudo rm -rf "$work/tree"

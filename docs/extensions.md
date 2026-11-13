@@ -43,6 +43,8 @@ Recovery always starts without extensions.
 | `flatpak` | included, special | Applications from Flathub, Discover (see [flatpak.md](flatpak.md)) |
 | `printing` | included, special | Printers: CUPS, network printers, Printers page (see [printing.md](printing.md)) |
 | `docker` | optional | The Docker engine, Compose, Buildx; users of the group `docker` use it without sudo |
+| `rocm` | optional | AMD ROCm runtimes (HIP, OpenCL), see [rocm.md](rocm.md) |
+| `rocm-sdk` | optional | AMD ROCm SDK: `hipcc`, math libraries, headers (several GB), see [rocm.md](rocm.md) |
 
 ## Making one
 
@@ -53,7 +55,10 @@ One directory per extension in `extensions/<name>/`:
   - `Special=yes|no`, `Default=yes|no` (yes: included in the system image);
   - `Packages=`, Arch packages: only what the system does not already have
     goes into the extension;
-  - `Enable=`, units to start with it (`docker.socket`).
+  - `Enable=`, units to start with it (`docker.socket`);
+  - `KeepDevelopment=yes`, keep headers and static libraries (an SDK);
+  - `Reinstall=`, packages of the system to install again whole (the system
+    image has no headers: `glibc linux-api-headers` for a compiler).
 - `files/`, files of its own (only under `/usr`; defaults for `/etc` go in
   `/usr/share/factory/etc`, with a `tmpfiles.d` line that links or copies
   them).

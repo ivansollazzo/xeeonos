@@ -18,6 +18,7 @@ own with "Re-run failed jobs".
 | `flatpak.sh` | Flatpak: Flathub set up for the whole system and for the user, Discover with Flatpak support | disk image |
 | `printing.sh` | printing: CUPS on demand, add a printer, Avahi and `.local` names, Plasma's Printers page | disk image |
 | `extensions.sh` | system extensions: included ones on, special ones ask, docker downloaded (signed), removed, installed from its file (with a warning) | disk image, system |
+| `rocm.sh` | ROCm SDK extension: downloaded, `/opt/rocm`, libraries found, `hipcc` compiles (no GPU in the VM) | disk image, system |
 | `hibernate.sh` | hibernate into the swap file, start again: the session resumes | disk image |
 | `secureboot.sh` | Secure Boot (firmware without keys): keys enrolled, signed start, TPM unlock without password, signed update, another TPM asks the password | disk image, next version |
 | `encryption.sh` | disk password on and off (recovery key), then a normal start | disk image |

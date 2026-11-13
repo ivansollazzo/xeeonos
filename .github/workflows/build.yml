@@ -152,7 +152,7 @@ jobs:
           mkosi --force --profile=plasma,audio --format=tar --bootable=no --image-version="$VERSION" build
           mv "mkosi.output/xeeonos_$VERSION.pkgdb.tar" "$RUNNER_TEMP/pkgdb.tar"
           rm -rf mkosi.output
-          MKEXT_WORK=$RUNNER_TEMP/mkext tools/mkext.sh "$RUNNER_TEMP/pkgdb.tar" "$VERSION" out/extensions out/update-system
+          MKEXT_WORK=$RUNNER_TEMP/mkext MKEXT_CACHE=mkosi.pkgcache/extensions tools/mkext.sh "$RUNNER_TEMP/pkgdb.tar" "$VERSION" out/extensions out/update-system
           ls -lh out/extensions out/update-system
 
       # The system: the full disk image (first-boot tests) and its update
@@ -250,6 +250,7 @@ jobs:
           - {test: flatpak, artifacts: disk-image}
           - {test: printing, artifacts: disk-image}
           - {test: extensions, artifacts: '{disk-image,update-system}'}
+          - {test: rocm, artifacts: '{disk-image,update-system}'}
           - {test: secureboot, artifacts: '{disk-image,update-next}'}
           - {test: iso-install, artifacts: '{live,update-system}'}
           - {test: iso-alongside, artifacts: '{live,update-system}'}

@@ -602,6 +602,8 @@ fn activate() -> Result<()> {
     }
     // Users and groups of the extensions (the boot's own run came before).
     run_program("systemd-sysusers", &[])?;
+    // Their libraries in other directories (/etc/ld.so.conf.d, e.g. ROCm).
+    let _ = run_program("ldconfig", &[]);
     let _ = run_program("udevadm", &["control", "--reload"]);
     // systemd read its units before the extensions were there.
     run_program("systemctl", &["daemon-reload"])?;

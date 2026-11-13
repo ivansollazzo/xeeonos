@@ -1,0 +1,4 @@
+#!/bin/sh
+# Setup= of the CI's test extension: once, at the first boot with it on.
+mkdir -p /var/lib/ci-hello
+echo "set up" >> /var/lib/ci-hello/setup

@@ -105,7 +105,7 @@ for conf in /src/extensions/*/extension.conf; do
         chown -R root:root "$root/usr"
     fi
 
-    # Its manifest, also inside the image (xctl ext install reads it there).
+    # Its manifest, also inside the image (xctl extensions install reads it there).
     mkdir -p "$root/usr/lib/xeeonos/extensions"
     cp "$conf" "$root/usr/lib/xeeonos/extensions/$name.conf"
 
@@ -114,7 +114,7 @@ for conf in /src/extensions/*/extension.conf; do
     units=$root/usr/lib/systemd/system
     for unit in $Enable; do
         # A unit of the system itself (e.g. avahi-daemon, which comes with
-        # the desktop): nothing to link here, `xctl ext activate` starts it.
+        # the desktop): nothing to link here, `xctl extensions activate` starts it.
         if [[ ! -e $units/$unit ]]; then
             echo "extension $name: $unit is part of the system, started at boot"
             continue

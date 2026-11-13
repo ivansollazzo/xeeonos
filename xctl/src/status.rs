@@ -23,7 +23,7 @@ pub fn run(check: bool) -> Result<()> {
 
     // How is /usr mounted? On a sealed system it is a dm-verity device
     // (/dev/mapper/usr), read-only.
-    // With system extensions (xctl ext) a second, read-only layer is mounted
+    // With system extensions (xctl extensions) a second, read-only layer is mounted
     // over it: the first mount is the system's own, and every layer must be
     // read-only.
     let usr_mounts = output_opt(
@@ -71,7 +71,7 @@ pub fn run(check: bool) -> Result<()> {
         yes_no(usr_verity)
     );
     if let Some(extensions) = crate::ext::summary() {
-        println!("Extensions:  {extensions} (xctl ext)");
+        println!("Extensions:  {extensions} (xctl extensions)");
     }
     println!("Data (/):    {root_fs}");
     // Without root rights the LUKS header cannot be read: say only whether

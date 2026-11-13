@@ -6,7 +6,7 @@ the same Arch snapshot as the system:
 | Extension | What | For |
 | --- | --- | --- |
 | `rocm` | HIP and OpenCL runtimes, `rocminfo`, `rocm-smi` | running programs that use the GPU |
-| `rocm-sdk` | all of `rocm`, plus `hipcc`, the HIP and OpenCL SDKs, the math libraries (rocBLAS, rocFFT, rocRAND, rocSPARSE, rocSOLVER, hipBLAS, ...) and their headers; several GB | building them |
+| `rocm-sdk` | all of `rocm`, plus `hipcc`, the HIP and OpenCL SDKs, the math libraries (rocBLAS, rocFFT, rocRAND, rocSPARSE, rocSOLVER, hipBLAS, ...) and their headers; about 12 GB to download, keep that much free on the disk | building them |
 
 Turn on one of the two:
 
@@ -30,6 +30,9 @@ then log in again. Supported cards are the ones ROCm supports (Radeon RX
 
 ## Tests
 
-`tools/ci/rocm.sh` turns `rocm-sdk` on in a virtual machine (no AMD GPU
-there): `hipcc` compiles, the libraries are found, `/opt/rocm` is in place.
-What runs on a real GPU is checked by hand.
+`tools/ci/rocm.sh` turns `rocm` on in a virtual machine (no AMD GPU there):
+`/opt/rocm` is in place, the libraries are found, `rocminfo` and `rocm-smi`
+are there. `rocm-sdk` (about 12 GB) is too large to download inside the
+virtual machine in reasonable time: the test mounts it and checks `hipcc`,
+the math libraries and the headers. What runs on a real GPU is checked by
+hand.

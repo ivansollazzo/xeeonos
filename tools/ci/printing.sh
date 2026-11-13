@@ -7,7 +7,10 @@ fresh_disk
 printf '%s\n' language=en_US.UTF-8 hostname=xeeonos-ci user=test \
     "fullname=Test User" password=test-password admin=yes > out/setup.txt
 cat > out/printing-test.sh <<'SCRIPT'
-systemctl is-enabled cups.socket | sed s,^,SOCKET-,
+# Started by the extension at boot (xctl ext activate), and pulled in by
+# sockets.target through the link the extension carries in /usr.
+systemctl is-active cups.socket | sed s,^,SOCKET-,
+test -L /usr/lib/systemd/system/sockets.target.wants/cups.socket && echo WANTS-link
 # CUPS writes its printers in /etc/cups: a real directory, not the link.
 test ! -L /etc/cups && test -w /etc/cups/cupsd.conf && echo ETC-writable
 lpstat -r | sed s,^,CUPS-,
@@ -22,7 +25,8 @@ tools/boot-test.sh \
     --setup out/setup.txt \
     --credential printing-test=out/printing-test.sh \
     --run "/bin/sh /run/credentials/@system/printing-test" \
-    --expect "SOCKET-enabled" \
+    --expect "SOCKET-active" \
+    --expect "WANTS-link" \
     --expect "ETC-writable" \
     --expect "CUPS-scheduler is running" \
     --expect "PRINTER-printer ci is idle" \

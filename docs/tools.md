@@ -1,4 +1,4 @@
-# Tools: SSH
+# Tools: SSH, AppImage
 
 Module `mkosi.conf.d/tools`, part of every installed XeeonOS (not of the
 live ISO).
@@ -23,6 +23,18 @@ sudo xctl firewall deny 22/tcp
 ```
 
 Its settings and keys are in `/etc/ssh` (kept across updates).
+
+## AppImage
+
+Applications distributed as a single `.AppImage` file run as they are:
+
+```
+chmod +x Application.AppImage
+./Application.AppImage
+```
+
+They need FUSE 2 (`libfuse.so.2`, `fusermount`), which is part of this
+module. For everything else, prefer Flatpak (Discover).
 
 ## Containers
 
@@ -49,4 +61,5 @@ on needs nothing else.
 ## Tests
 
 `tools/ci/tools.sh`: the user created by the setup has ID ranges for
-containers; the SSH client is there; the SSH server is off.
+containers; the SSH client is there; the SSH server is off; FUSE 2 is there
+for AppImage files.

@@ -13,6 +13,9 @@ ssh -V 2>&1 | sed s,^,SSH-,
 systemctl is-enabled sshd.service | sed s,^,SSHD-,
 systemctl is-active sshd.service | sed s,^,SSHD-,
 test -e /etc/ssh/sshd_config && echo SSHD-CONFIG-present
+# AppImage: the FUSE 2 library and fusermount (setuid, for users).
+test -e /usr/lib/libfuse.so.2 && echo FUSE2-present
+test -u /usr/bin/fusermount && echo FUSERMOUNT-setuid
 xctl status --check
 SCRIPT
 tools/boot-test.sh \
@@ -25,5 +28,7 @@ tools/boot-test.sh \
     --expect "SSHD-disabled" \
     --expect "SSHD-inactive" \
     --expect "SSHD-CONFIG-present" \
+    --expect "FUSE2-present" \
+    --expect "FUSERMOUNT-setuid" \
     --expect "check: sealed system OK" \
     out/disk.raw out/serial-tools.log

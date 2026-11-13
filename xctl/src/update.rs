@@ -5,6 +5,7 @@
 //!   xeeonos_<v>.efi                              kernel (UKI)
 //!   xeeonos_<v>.usr-x86-64.<uuid>.raw.zst         /usr partition
 //!   xeeonos_<v>.usr-x86-64-verity.<uuid>.raw.zst  its dm-verity hash tree
+//!   xeeonos_<v>.<name>.xext                       optional extensions (xctl ext)
 //!   SHA256SUMS, SHA256SUMS.gpg                    manifest + signature
 //!
 //! Steps: fetch the signed manifest (a few hundred bytes), check its
@@ -29,7 +30,7 @@ use crate::version::{compare, read_os_release};
 
 /// Where updates come from.
 #[derive(Debug, PartialEq)]
-enum Source {
+pub(crate) enum Source {
     /// An OCI artifact on a registry, e.g. ghcr.io/ivansollazzo/xeeonos:experimental
     Oci(String),
     /// A web directory, e.g. http://10.0.2.2:8080
@@ -39,7 +40,7 @@ enum Source {
 }
 
 impl Source {
-    fn parse(s: &str) -> Source {
+    pub(crate) fn parse(s: &str) -> Source {
         if let Some(reference) = s.strip_prefix("oci://") {
             Source::Oci(reference.to_string())
         } else if s.starts_with("http://") || s.starts_with("https://") {
@@ -162,7 +163,26 @@ pub fn run(args: &[String]) -> Result<()> {
         return Ok(());
     }
 
-    // Only now the large files.
+    // Only now the large files: the system, and the new version's copy of
+    // the optional extensions that are turned on here (xctl ext).
+    let wanted = crate::ext::enabled_optional();
+    let extensions: Vec<String> = wanted
+        .iter()
+        .filter(|name| names.contains(&crate::ext::update_file(&new, name)))
+        .cloned()
+        .collect();
+    for name in wanted.iter().filter(|n| !extensions.contains(n)) {
+        println!(
+            "The extension {name} is not published for XeeonOS {new}: \
+             it will be off on that version."
+        );
+    }
+    let names: Vec<String> = names
+        .into_iter()
+        .filter(|file| {
+            crate::ext::extension_of(file).is_none_or(|name| extensions.iter().any(|e| e == name))
+        })
+        .collect();
     fetch_files(&source, cache, &names)?;
     check_hashes(cache)?;
     // The copy of a turned-off version still on the disk may be damaged:
@@ -179,6 +199,15 @@ pub fn run(args: &[String]) -> Result<()> {
     println!("Installing XeeonOS {new} (running: {current})...");
     // The files were verified above against the signed manifest.
     run_program(config::SYSUPDATE, &["update", &new])?;
+    for name in &extensions {
+        crate::ext::store(cache, &new, name)?;
+        println!("Extension {name}: installed for XeeonOS {new}.");
+    }
+    // Downloaded extensions of versions that are gone from the boot menu.
+    if let Ok(entries) = boot::entries(&boot::esp()) {
+        let keep: Vec<String> = entries.into_iter().map(|e| e.version).collect();
+        crate::ext::prune(&keep);
+    }
     println!("XeeonOS {new} is installed. Restart to start using it.");
     Ok(())
 }
@@ -325,7 +354,7 @@ pub fn available() -> Option<String> {
 }
 
 /// Removes a directory when it goes out of scope (Rust's "Drop" trait).
-struct Cleanup<'a>(&'a Path);
+pub(crate) struct Cleanup<'a>(pub(crate) &'a Path);
 
 impl Drop for Cleanup<'_> {
     fn drop(&mut self) {
@@ -334,7 +363,7 @@ impl Drop for Cleanup<'_> {
 }
 
 /// Put the signed manifest (SHA256SUMS) into `dir` and verify its signature.
-fn fetch_manifest(source: &Source, dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
+pub(crate) fn fetch_manifest(source: &Source, dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
     if !matches!(source, Source::Dir(_)) {
         wait_for_network();
     }
@@ -369,7 +398,7 @@ fn fetch_manifest(source: &Source, dir: &Path, keyrings: &[PathBuf]) -> Result<(
 }
 
 /// Put the files listed in the (verified) manifest into `dir`.
-fn fetch_files(source: &Source, dir: &Path, names: &[String]) -> Result<()> {
+pub(crate) fn fetch_files(source: &Source, dir: &Path, names: &[String]) -> Result<()> {
     match source {
         Source::Oci(reference) => {
             println!("Downloading {reference}...");
@@ -514,7 +543,15 @@ fn verify_signature(dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
 /// Check every file against the (already verified) manifest.
 pub(crate) fn check_hashes(dir: &Path) -> Result<()> {
     let ok = Command::new("sha256sum")
-        .args(["--check", "--strict", "--quiet", "SHA256SUMS"])
+        // --ignore-missing: the manifest also lists the optional extensions
+        // (xctl ext), which are downloaded only where they are turned on.
+        .args([
+            "--check",
+            "--strict",
+            "--quiet",
+            "--ignore-missing",
+            "SHA256SUMS",
+        ])
         .current_dir(dir)
         .status()
         .map_err(|e| err(format!("cannot run sha256sum: {e}")))?

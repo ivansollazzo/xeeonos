@@ -23,11 +23,21 @@ pub fn run(check: bool) -> Result<()> {
 
     // How is /usr mounted? On a sealed system it is a dm-verity device
     // (/dev/mapper/usr), read-only.
-    let usr_source =
-        output_opt("findmnt", &["--noheadings", "--output", "SOURCE", "/usr"]).unwrap_or_default();
-    let usr_options =
-        output_opt("findmnt", &["--noheadings", "--output", "OPTIONS", "/usr"]).unwrap_or_default();
-    let usr_read_only = usr_options.split(',').any(|o| o == "ro");
+    // With system extensions (xctl ext) a second, read-only layer is mounted
+    // over it: the first mount is the system's own, and every layer must be
+    // read-only.
+    let usr_mounts = output_opt(
+        "findmnt",
+        &[
+            "--noheadings",
+            "--list",
+            "--output",
+            "SOURCE,OPTIONS",
+            "/usr",
+        ],
+    )
+    .unwrap_or_default();
+    let (usr_source, usr_read_only) = usr_mount(&usr_mounts);
 
     let mut usr_verity = false;
     let mut running_slot = None;
@@ -60,6 +70,9 @@ pub fn run(check: bool) -> Result<()> {
         yes_no(usr_read_only),
         yes_no(usr_verity)
     );
+    if let Some(extensions) = crate::ext::summary() {
+        println!("Extensions:  {extensions} (xctl ext)");
+    }
     println!("Data (/):    {root_fs}");
     // Without root rights the LUKS header cannot be read: say only whether
     // the data partition is encrypted.
@@ -168,6 +181,21 @@ pub fn run(check: bool) -> Result<()> {
     Ok(())
 }
 
+/// From findmnt's "SOURCE OPTIONS" lines for /usr: the source of the first
+/// mount (the system's), and whether every mount there is read-only.
+fn usr_mount(lines: &str) -> (String, bool) {
+    let mounts: Vec<(&str, &str)> = lines
+        .lines()
+        .filter_map(|l| l.trim().split_once(char::is_whitespace))
+        .collect();
+    let source = mounts.first().map_or("", |m| m.0).to_string();
+    let read_only = !mounts.is_empty()
+        && mounts
+            .iter()
+            .all(|m| m.1.trim().split(',').any(|o| o == "ro"));
+    (source, read_only)
+}
+
 fn yes_no(b: bool) -> &'static str {
     if b { "yes" } else { "no" }
 }
@@ -222,4 +250,26 @@ fn usr_slots(disk: &str) -> Vec<Slot> {
                 })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn usr_mounts() {
+        // Sealed, no extensions.
+        assert_eq!(
+            usr_mount("/dev/mapper/usr ro,relatime\n"),
+            ("/dev/mapper/usr".to_string(), true)
+        );
+        // With extensions: an overlay over it, also read-only.
+        assert_eq!(
+            usr_mount("/dev/mapper/usr ro,relatime\nsysext   ro,nodev,lowerdir=/a:/usr\n"),
+            ("/dev/mapper/usr".to_string(), true)
+        );
+        assert!(!usr_mount("/dev/mapper/usr ro\noverlay rw,lowerdir=/usr\n").1);
+        assert!(!usr_mount("/dev/vda2 rw,relatime\n").1);
+        assert!(!usr_mount("").1);
+    }
 }

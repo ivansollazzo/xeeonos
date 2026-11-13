@@ -39,12 +39,11 @@ A variant is a set of optional modules on top of the core ones:
 | --- | --- |
 | Core (no desktop), installed system | `mkosi build` |
 | Live ISO | `mkosi --profile=live build` |
-| Desktop: what CI builds and publishes | `mkosi --profile=plasma,audio build` |
-| Desktop, later | `mkosi --profile=plasma,audio,flatpak,xapp,printing build` |
+| Desktop: what CI builds and publishes | `tools/mkext.sh` (extensions), then `mkosi --profile=plasma,audio --extra-tree=<extensions>:/usr/lib/xeeonos/extensions build` (see the workflow) |
 
-## Runtime modules
+## Extensions
 
-Optional extras that users switch on after installation (virtualization,
-developer tools) are shipped separately as signed system extensions
-(`systemd-sysext`) and managed with `xctl ext`. The desktop is not one of them:
-it is part of the tested image of its variant.
+Software on top of the sealed system, turned on and off after installation
+with `xctl ext`: `flatpak` and `printing` (included), `docker` (optional). See
+[extensions.md](extensions.md). The desktop is not one of them: it is part of
+the tested image of its variant.

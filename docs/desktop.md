@@ -11,10 +11,14 @@ The published XeeonOS images have the KDE Plasma desktop (module
   **screens** and **power** (power profiles), all in System Settings. Sound
   (PipeWire) is the module `audio`, and Bluetooth is part of the core
   system, the same for every desktop;
+- **printers** in System Settings (extension `printing`, see
+  [printing.md](printing.md));
 - the applications that must be part of the system: **Konsole** (terminal),
   **Dolphin** (files), **Spectacle** (screenshots), **System Monitor**
-  (processes and resources) and **Ark** (archives). More applications will
-  come as `.xapp` bundles and from Flatpak, not inside the system image;
+  (processes and resources) and **Ark** (archives). Every other application
+  comes from Flathub, with **Discover** as the app store (extension `flatpak`,
+  see [flatpak.md](flatpak.md)), and later as `.xapp` bundles, not inside
+  the system image;
 - graphics with Mesa for Intel, AMD and Nouveau (OpenGL, Vulkan, video
   decoding);
 - Noto fonts for every language, emoji included.
@@ -29,6 +33,9 @@ the first user's desktop (`/etc/X11/xorg.conf.d/00-keyboard.conf` and
   `/etc/sddm.conf.d/` overrides it (for example automatic login:
   `[Autologin]` `User=<name>` `Session=plasma`).
 - Like everything in `/usr`, the desktop changes only with `xctl update`.
+- The partitions of the system itself (system slots, data partition) are
+  not listed as disks in Dolphin
+  (`/usr/lib/udev/rules.d/85-xeeonos-system-disks.rules`).
 
 ## Without a desktop
 

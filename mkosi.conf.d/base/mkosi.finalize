@@ -10,6 +10,12 @@ root=$BUILDROOT
 # no longer has its files, so it is left out.
 db=$root/var/tmp/xeeonos-pkgdb
 mkdir -p "$root/usr/share/xeeonos"
+# The same database, without the removed packages, is also written next to
+# the image (xeeonos_<version>.pkgdb.tar): tools/mkext.sh uses it to build
+# the system extensions with only what the system does not already have.
+kept=$(mktemp -d)
+mkdir "$kept/local"
+cp "$db/ALPM_DB_VERSION" "$kept/local/" 2>/dev/null || true
 for pkg in "$db"/*/; do
     name=$(sed -n '/^%NAME%$/{n;p;q}' "$pkg/desc")
     version=$(sed -n '/^%VERSION%$/{n;p;q}' "$pkg/desc")
@@ -18,9 +24,11 @@ for pkg in "$db"/*/; do
     file=$(awk '/^%FILES%$/ {f=1; next} /^$/ {f=0} f && !/\/$/ && !seen {print; seen=1}' "$pkg/files" 2>/dev/null || true)
     if [[ -z $file || -e $root/$file || -L $root/$file ]]; then
         printf '%s %s\n' "$name" "$version"
+        cp -a "$pkg" "$kept/local/"
     fi
 done | sort >"$root/usr/share/xeeonos/packages"
-rm -rf "$db"
+tar -C "$kept" -cf "$OUTPUTDIR/xeeonos_${IMAGE_VERSION:?}.pkgdb.tar" local
+rm -rf "$db" "$kept"
 
 # 2. Arch's way of installing and configuring: not used on XeeonOS.
 rm -rf "$root/usr/share/libalpm" "$root/etc/pacman.d" "$root/etc/pacman.conf" \

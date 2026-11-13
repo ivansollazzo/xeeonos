@@ -1,12 +1,13 @@
 //! xctl - the XeeonOS system tool.
 //!
 //! Commands: `status`, `update`, `rollback`, `channel`, `packages`, `setup`,
-//! `install-system`, `recovery`, `network`, `encryption`, `firewall`, `snapshots`,
+//! `ext`, `install-system`, `recovery`, `network`, `encryption`, `firewall`, `snapshots`,
 //! `report`. Each command lives in its own module (file) below.
 
 mod boot;
 mod channel;
 mod encryption;
+mod ext;
 mod firewall;
 mod health;
 mod install;
@@ -43,6 +44,18 @@ mod config {
     /// The channel chosen by the administrator, if any.
     pub const CHANNEL_FILE: &str = "/etc/xeeonos/channel";
     pub const OS_RELEASE: &str = "/usr/lib/os-release";
+    /// System extensions (xctl ext): what this version knows (<name>.conf)
+    /// and the images included in the system image (<name>.xext).
+    pub const EXTENSIONS: &str = "/usr/lib/xeeonos/extensions";
+    /// Downloaded extensions: <version>/<name>.xext.
+    pub const EXTENSIONS_STORE: &str = "/var/lib/xeeonos/extensions";
+    /// Extensions installed from a file: <name>.xext and <name>.conf.
+    pub const EXTENSIONS_LOCAL: &str = "/var/lib/xeeonos/extensions-local";
+    /// The administrator's choices: <name>=on|off.
+    pub const EXTENSIONS_CHOICES: &str = "/etc/xeeonos/extensions";
+    /// Where systemd-sysext looks for the extensions to lay over /usr.
+    pub const EXTENSIONS_RUN: &str = "/run/extensions";
+    pub const EXTENSIONS_CACHE: &str = "/var/cache/xctl/ext";
     /// Present only in the live ISO (mkosi.profiles/live).
     pub const LIVE_MARKER: &str = "/usr/lib/xeeonos/live";
     /// Kernel command line word of the Recovery boot entry.
@@ -82,6 +95,20 @@ Commands:
                          version.
   channel set <name>     Switch to the channel <name> (only one that exists).
   channel reset          Go back to the channel this version was built for.
+  ext [list]             List the system extensions: software added on top of
+                         the sealed system (see docs/extensions.md).
+  ext enable <name>      Turn an extension on (an optional one is downloaded
+                         first), from the next restart.
+      --from <source>    Download it from <source> instead of the registry
+                         (a directory, an http(s) URL, or oci://...).
+      --keyring <file>   Also accept the keys in <file>.
+  ext disable <name> [--yes]
+                         Turn an extension off, from the next restart. A
+                         special one asks first.
+  ext install <file> [--yes]
+                         Install an extension image from a file (not signed,
+                         not verified: asks first).
+  ext remove <name>      Turn an optional extension off and delete it.
   packages [<name>]      List the packages of this version (and their
                          versions); with <name>, only those containing it.
   setup                  First-boot setup: language, keyboard, time zone,
@@ -154,6 +181,7 @@ fn main() {
         "recovery" => recovery::run_recovery(rest),
         "setup" => setup::run_setup(rest),
         "channel" => channel::run(rest),
+        "ext" => ext::run(rest),
         "network" => network::run_network(rest),
         "firewall" => firewall::run_firewall(rest),
         "snapshots" => snapshots::run_snapshots(rest),

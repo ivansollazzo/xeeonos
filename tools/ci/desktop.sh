@@ -42,6 +42,10 @@ wait_for test plasmashell
 pgrep -u test -l -x plasmashell | sed s,^,DESKTOP-,
 sleep 10
 if test -S "/run/user/$(id -u test)/pipewire-0"; then echo SOUND-ready; fi
+# The system's own partitions are not shown as disks (Dolphin, through UDisks).
+for d in /dev/mapper/root /dev/mapper/usr /dev/disk/by-partlabel/xeeonos-root; do
+    udevadm info -q property "$d" | grep -q '^UDISKS_IGNORE=1' && echo "HIDDEN-$(basename "$d")"
+done
 SCRIPT
 TIMEOUT=900 tools/boot-test.sh \
     --setup out/setup.txt \
@@ -53,4 +57,7 @@ TIMEOUT=900 tools/boot-test.sh \
     --expect "KXKB-LayoutList=it" \
     --expect "DESKTOP-[0-9]+ plasmashell" \
     --expect "SOUND-ready" \
+    --expect "HIDDEN-root" \
+    --expect "HIDDEN-usr" \
+    --expect "HIDDEN-xeeonos-root" \
     out/disk.raw out/serial-desktop.log

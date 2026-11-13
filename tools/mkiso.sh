@@ -35,7 +35,13 @@ mkdir -p "$work/root"
 # The UKI lives only in the ESP image, so the ISO is not twice its size.
 printf 'XeeonOS live ISO. Boot it in UEFI mode.\n' > "$work/root/README.txt"
 contents=("/=$work/root")
-[[ -n $system ]] && contents+=("/xeeonos/=$system")
+# The system's files, without the optional extensions (.xext): those are
+# downloaded where they are turned on (xctl ext), not installed.
+if [[ -n $system ]]; then
+    for file in "$system"/*; do
+        [[ $file == *.xext ]] || contents+=("/xeeonos/$(basename "$file")=$file")
+    done
+fi
 
 xorriso -as mkisofs \
     -iso-level 3 -full-iso9660-filenames -joliet -joliet-long -rational-rock \

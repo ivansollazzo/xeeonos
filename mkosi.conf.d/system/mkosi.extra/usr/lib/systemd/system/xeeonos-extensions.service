@@ -1,0 +1,21 @@
+# System extensions (`xctl ext`, docs/extensions.md): at every boot, before
+# the services start, lay the extensions that are turned on over /usr
+# (systemd-sysext) and bring in their users, device rules and units.
+# After systemd-sysusers (the system's own users first, with the passwords
+# given at the first boot), before systemd-tmpfiles (the extensions' files in
+# /etc and /var).
+[Unit]
+Description=XeeonOS system extensions
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/extensions.md
+DefaultDependencies=no
+ConditionDirectoryNotEmpty=/usr/lib/xeeonos/extensions
+# Recovery stays the plain system: an extension can never get in its way.
+ConditionKernelCommandLine=!xeeonos.recovery
+After=local-fs.target systemd-sysusers.service
+Before=sysinit.target systemd-tmpfiles-setup.service shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/xctl ext activate

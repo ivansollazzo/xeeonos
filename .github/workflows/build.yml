@@ -166,6 +166,11 @@ jobs:
           mkdir -p mkosi.cache mkosi.pkgcache out/update-system
           mkosi --force --profile=plasma,audio --format=tar --bootable=no --image-version="$VERSION" build
           mv "mkosi.output/xeeonos_$VERSION.pkgdb.tar" "$RUNNER_TEMP/pkgdb.tar"
+          # Published with the update: the extensions' repository builds them
+          # for this version from its package list and Arch snapshot.
+          zstd -q -T0 "$RUNNER_TEMP/pkgdb.tar" -o "out/update-system/xeeonos_$VERSION.pkgdb.tar.zst"
+          printf 'VERSION=%s\nSNAPSHOT=%s\n' "$VERSION" "$(sed -n 's/^Snapshot=//p' mkosi.conf)" \
+            > "out/update-system/xeeonos_$VERSION.build.txt"
           rm -rf mkosi.output
           MKEXT_WORK=$RUNNER_TEMP/mkext tools/mkext.sh "$RUNNER_TEMP/pkgdb.tar" "$VERSION" out/extensions out/update-system
           ls -lh out/extensions out/update-system
@@ -362,3 +367,19 @@ jobs:
           "$oras" push "$repo:$VERSION" --artifact-type application/vnd.xeeonos.update.v1 ./*
           "$oras" tag "$repo:$VERSION" "$CHANNEL"
           echo "Published $repo:$VERSION (channel $CHANNEL)" >> "$GITHUB_STEP_SUMMARY"
+
+      # The extensions' repository builds the optional extensions for this
+      # version (a pull request that merges by itself when green).
+      - name: Tell xeeonos-extensions
+        if: env.CHANNEL != ''
+        env:
+          GH_TOKEN: ${{ secrets.XEEONOS_BOT_TOKEN }}
+        run: |
+          if [[ -z $GH_TOKEN ]]; then
+            echo "::warning::XEEONOS_BOT_TOKEN is not set: xeeonos-extensions not told about $VERSION"
+            exit 0
+          fi
+          gh api "repos/${{ github.repository_owner }}/xeeonos-extensions/dispatches" \
+            -f event_type=xeeonos-published \
+            -f "client_payload[version]=$VERSION" -f "client_payload[channel]=$CHANNEL"
+          echo "xeeonos-extensions told about $VERSION" >> "$GITHUB_STEP_SUMMARY"

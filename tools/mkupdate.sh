@@ -28,7 +28,8 @@ for part in "$src/xeeonos_$version".usr-x86-64.*.raw "$src/xeeonos_$version".usr
     zstd --quiet --force -T0 -19 --long=27 "$part" -o "$out/$(basename "$part").zst"
 done
 
-(cd "$out" && sha256sum -- xeeonos_* > SHA256SUMS)
+# (With the optional extensions built for the CI, and their manifests.)
+(cd "$out" && shopt -s nullglob && sha256sum -- xeeonos_* ./*.conf | sed 's, \./, ,' > SHA256SUMS)
 if [[ -n ${SIGNING_KEY:-} ]]; then
     gpg --batch --yes --local-user "$SIGNING_KEY" --detach-sign \
         --output "$out/SHA256SUMS.gpg" "$out/SHA256SUMS"

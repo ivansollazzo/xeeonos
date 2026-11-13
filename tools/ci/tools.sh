@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Module tools (mkosi.conf.d/tools): containers without root for the user
-# created by the setup (podman, distrobox), the SSH client, and the SSH
-# server installed but off.
+# Module tools (mkosi.conf.d/tools): the SSH client, the SSH server
+# installed but off, and the user ID ranges for containers without root
+# (extensions podman, distrobox) given to the user created by the setup.
 source "$(dirname "$0")/common.sh"
 fresh_disk
 printf '%s\n' language=en_US.UTF-8 hostname=xeeonos-ci user=test \
@@ -9,11 +9,6 @@ printf '%s\n' language=en_US.UTF-8 hostname=xeeonos-ci user=test \
 cat > out/tools-test.sh <<'SCRIPT'
 grep -c '^test:' /etc/subuid | sed s,^,SUBUID-,
 grep -c '^test:' /etc/subgid | sed s,^,SUBGID-,
-test -e /etc/containers/policy.json && echo POLICY-present
-# podman as the user, without root (no login session here: no systemd).
-su - test -c 'podman --cgroup-manager=cgroupfs info --format "{{.Host.Security.Rootless}} {{.Store.GraphDriverName}}"' 2>&1 |
-    sed s,^,PODMAN-,
-distrobox --version | sed s,^,DISTROBOX-,
 ssh -V 2>&1 | sed s,^,SSH-,
 systemctl is-enabled sshd.service | sed s,^,SSHD-,
 systemctl is-active sshd.service | sed s,^,SSHD-,
@@ -26,9 +21,6 @@ tools/boot-test.sh \
     --run "/bin/sh /run/credentials/@system/tools-test" \
     --expect "SUBUID-1" \
     --expect "SUBGID-1" \
-    --expect "POLICY-present" \
-    --expect "PODMAN-true " \
-    --expect "DISTROBOX-distrobox: [0-9]" \
     --expect "SSH-OpenSSH_" \
     --expect "SSHD-disabled" \
     --expect "SSHD-inactive" \

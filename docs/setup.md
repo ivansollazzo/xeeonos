@@ -75,7 +75,7 @@ installing and configuring packages are removed at the end of the build:
 pacman and its configuration, the mirror list and keyring, the package
 database, pacman hooks, `locale-gen`. Files only used to compile programs
 (`/usr/include`, static libraries, pkg-config files) are removed too:
-development happens in containers (distrobox).
+development happens in containers (extension distrobox).
 
 `xctl packages [name]` lists the packages of the running version, with
 their versions; the same list is published with every update

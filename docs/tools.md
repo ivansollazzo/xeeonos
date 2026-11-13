@@ -1,24 +1,7 @@
-# Tools: containers and SSH
+# Tools: SSH
 
 Module `mkosi.conf.d/tools`, part of every installed XeeonOS (not of the
 live ISO).
-
-## Containers
-
-The system image cannot be changed, so software that is not an application
-(compilers, command line tools, another distribution's packages) lives in
-containers, in your home directory:
-
-```
-distrobox create --name dev --image archlinux:latest
-distrobox enter dev
-```
-
-- **podman** runs the containers, without root: each user has their own,
-  in `~/.local/share/containers`.
-- **distrobox** makes a container feel like the system: same home
-  directory, same user, graphical applications included. `.xapp`
-  applications are built on it.
 
 ## SSH
 
@@ -41,8 +24,29 @@ sudo xctl firewall deny 22/tcp
 
 Its settings and keys are in `/etc/ssh` (kept across updates).
 
+## Containers
+
+The system image cannot be changed, so software that is not an application
+(compilers, command line tools, another distribution's packages) lives in
+containers, in your home directory. podman and distrobox are optional
+extensions ([xeeonos-extensions](https://github.com/ivansollazzo/xeeonos-extensions)):
+
+```
+sudo xctl ext enable distrobox     # brings podman with it
+distrobox create --name dev --image archlinux:latest
+distrobox enter dev
+```
+
+- **podman** (`sudo xctl ext enable podman` alone) runs the containers,
+  without root: each user has their own, in `~/.local/share/containers`.
+- **distrobox** makes a container feel like the system: same home
+  directory, same user, graphical applications included.
+
+This module gives every user the ranges of user IDs that containers
+without root need (`/etc/subuid`, `/etc/subgid`), so turning an extension
+on needs nothing else.
+
 ## Tests
 
 `tools/ci/tools.sh`: the user created by the setup has ID ranges for
-containers and podman works without root; distrobox and the SSH client are
-there; the SSH server is off.
+containers; the SSH client is there; the SSH server is off.

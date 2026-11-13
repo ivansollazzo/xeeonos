@@ -20,7 +20,7 @@ snapshot, output, tools tree) stay in the top-level `mkosi.conf`.
 | --- | --- | --- |
 | `base` | core | Kernel, firmware, systemd, NetworkManager, Bluetooth, all languages, XeeonOS identity and version; removes pacman and build-only files |
 | `system` | core | Sealed disk: ESP, A/B `/usr` slots (erofs + dm-verity), Btrfs data partition, hermetic `/etc`, sysupdate definitions, boot health check, first-boot setup, Recovery boot entry |
-| `tools` | core | Containers (podman, distrobox) and SSH (server off by default), see [tools.md](tools.md); not in the live ISO |
+| `tools` | core | SSH (server off by default); podman and distrobox are optional extensions, see [tools.md](tools.md); not in the live ISO |
 | `xctl` | core | The `xctl` system tool (Rust, source in `xctl/`): status, update, rollback, channel, packages, setup, install-system |
 | `live` | optional | Live ISO: UKI running from RAM, root autologin, installer tools; replaces `system` |
 | `audio` | optional | Sound for every desktop: PipeWire (PulseAudio, ALSA and JACK interfaces) |

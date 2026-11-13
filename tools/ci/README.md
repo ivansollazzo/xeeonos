@@ -14,7 +14,7 @@ own with "Re-run failed jobs".
 | `base.sh` | zram and swap file, systemd-oomd, firewall (closed, open/close a port), scheduled jobs, disk health, pstore, fwupd, `xctl report` | disk image |
 | `snapshots.sh` | take a data snapshot, change files, restore it from Recovery | disk image |
 | `desktop.sh` | KDE Plasma: login screen (SDDM on Wayland) after the setup, keyboard layout from the setup, Plasma session with sound, system partitions hidden from the file manager | disk image |
-| `tools.sh` | containers without root for the user of the setup (podman, distrobox), SSH client, SSH server off | disk image |
+| `tools.sh` | SSH client, SSH server off, user ID ranges for containers (extensions podman, distrobox) | disk image |
 | `flatpak.sh` | Flatpak: Flathub set up for the whole system and for the user, Discover with Flatpak support | disk image |
 | `printing.sh` | printing: CUPS on demand, add a printer, Avahi and `.local` names, Plasma's Printers page | disk image |
 | `extensions.sh` | system extensions: included ones on, special ones ask, the test extension ci-hello downloaded (signed, with its manifest), removed, installed from its file (with a warning) | disk image, system |

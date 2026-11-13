@@ -6,9 +6,10 @@
 # instead of building them again (see .github/workflows/build.yml).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-git ls-files -z |
-    grep -zEv '^(docs/|tools/ci/|\.github/dependabot\.yml$|\.github/workflows/snapshot\.yml$|tools/(boot-test\.sh|mkiso\.sh|snapshot-report\.py)$)|\.md$' |
+# git's own hash of every file ("<mode> <hash> <stage>\t<path>"): it covers
+# symbolic links (their target) and the executable bit too.
+git ls-files --stage -z |
+    grep -zEv $'\t(docs/|tools/ci/|\\.github/dependabot\\.yml$|\\.github/workflows/snapshot\\.yml$|tools/(boot-test\\.sh|mkiso\\.sh|snapshot-report\\.py)$)|\\.md$' |
     sort -z |
-    xargs -0 sha256sum |
     sha256sum |
     cut -d' ' -f1

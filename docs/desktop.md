@@ -33,6 +33,9 @@ the first user's desktop (`/etc/X11/xorg.conf.d/00-keyboard.conf` and
   `/etc/sddm.conf.d/` overrides it (for example automatic login:
   `[Autologin]` `User=<name>` `Session=plasma`).
 - Like everything in `/usr`, the desktop changes only with `xctl update`.
+- The partitions of the system itself (system slots, data partition) are
+  not listed as disks in Dolphin
+  (`/usr/lib/udev/rules.d/85-xeeonos-system-disks.rules`).
 
 ## Without a desktop
 

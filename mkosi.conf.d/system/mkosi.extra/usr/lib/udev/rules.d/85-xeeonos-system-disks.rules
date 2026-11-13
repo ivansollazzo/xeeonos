@@ -1,0 +1,12 @@
+# The partitions of XeeonOS itself are not disks for the user: file managers
+# and "removable devices" lists (through UDisks) do not show them.
+SUBSYSTEM!="block", GOTO="xeeonos_system_disks_end"
+
+# The system slots (A/B /usr and their verity data, used or empty) and the
+# encrypted data partition.
+ENV{ID_PART_ENTRY_NAME}=="xeeonos_*|_empty|xeeonos-root", ENV{UDISKS_IGNORE}="1"
+# The same once opened: /usr (dm-verity) and the data filesystem (LUKS).
+KERNEL=="dm-*", ENV{DM_NAME}=="usr|root", ENV{UDISKS_IGNORE}="1"
+ENV{ID_FS_LABEL}=="xeeonos-root", ENV{UDISKS_IGNORE}="1"
+
+LABEL="xeeonos_system_disks_end"

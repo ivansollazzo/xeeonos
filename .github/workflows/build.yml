@@ -305,6 +305,18 @@ jobs:
           sudo apt-get install --assume-yes --no-install-recommends \
             qemu-system-x86 ovmf swtpm zstd dosfstools mtools xorriso fdisk
 
+      # The runners have KVM, but /dev/kvm is not open to the runner's user:
+      # without it QEMU emulates the processor (tools/boot-test.sh falls back
+      # to accel=tcg), many times slower.
+      - name: Let QEMU use KVM
+        if: env.SKIP != 'yes'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+            sudo tee /etc/udev/rules.d/99-xeeonos-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
       # The version of the images (they may come from an earlier run).
       - name: Version under test
         if: env.SKIP != 'yes'

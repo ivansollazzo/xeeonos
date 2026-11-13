@@ -8,14 +8,23 @@ with a XeeonOS manifest inside), laid over `/usr` at every boot
 (`systemd-sysext`, started by `xeeonos-extensions.service`).
 
 ```
-xctl ext list                      # every extension of this version and its state
-sudo xctl ext enable docker        # download (signed) and turn on
-sudo xctl ext disable docker       # turn off
-sudo xctl ext remove docker        # turn off and delete
-sudo xctl ext install my.xext      # from a file: not verified, asks first
+xctl extensions list                      # installed ones and their state, then those
+                                          # that can be downloaded for this version
+sudo xctl extensions enable docker        # download (signed) and turn on
+sudo xctl extensions disable docker       # turn off
+sudo xctl extensions remove docker        # turn off and delete
+sudo xctl extensions install my.xext      # from a file: not verified, asks first
 ```
 
 Changes take effect at the next restart.
+
+`xctl extensions list` shows two sections: **Installed** (included,
+downloaded, from a file) and **Can be downloaded** for the running version.
+The second one is read from the extensions' registry: the manifests
+(`<name>.conf`) published next to the images and listed in the signed
+`SHA256SUMS`, so an extension added to xeeonos-extensions later shows up
+without a system update. Without a network, or with `--offline`, only the
+first section is shown.
 
 ## Kinds
 
@@ -23,7 +32,7 @@ Changes take effect at the next restart.
 | --- | --- | --- |
 | Included | inside the system image (`/usr/lib/xeeonos/extensions/<name>.xext`): sealed and updated with the system, on from the start, also when installed from the ISO without a network | turned off and on |
 | Optional | built for every version by the repository [xeeonos-extensions](https://github.com/ivansollazzo/xeeonos-extensions) and published as `ghcr.io/ivansollazzo/xeeonos-extensions:<version>` (`xeeonos_<version>.<name>.xext` and its manifest `<name>.conf`, signed with the update key) | downloaded, turned on and off, removed |
-| From a file | `sudo xctl ext install <file.xext>`: anything, not signed and not checked by XeeonOS (a warning says so) | turned on and off, removed |
+| From a file | `sudo xctl extensions install <file.xext>`: anything, not signed and not checked by XeeonOS (a warning says so) | turned on and off, removed |
 
 **Special** extensions take away something the rest of the system relies on
 when they are turned off: XeeonOS shows a warning and asks first.
@@ -35,7 +44,7 @@ optional extensions that are on, and keeps the old one for going back
 and publishes its extensions by itself soon after; until they are out,
 `sudo xctl update` waits (installs nothing and says why), so an update never
 takes an extension away. An extension from a file made for another version is left
-out at boot (`xctl ext list` still shows it).
+out at boot (`xctl extensions list` still shows it).
 
 Recovery always starts without extensions.
 
@@ -54,11 +63,24 @@ The included ones are here, the optional ones in xeeonos-extensions, made
 the same way. One directory per extension in `extensions/<name>/`:
 
 - `extension.conf`, the manifest (shell syntax):
-  - `Description=`, shown by `xctl ext list`;
+  - `Description=`, shown by `xctl extensions list`;
   - `Special=yes|no`, `Default=yes|no` (yes: included in the system image);
   - `Packages=`, Arch packages: only what the system does not already have
     goes into the extension;
-  - `Enable=`, units to start with it (`docker.socket`).
+  - hooks, what it does to the system besides adding files:
+    - `Enable=`, units to start with it (`docker.socket`);
+    - `Disable=`, units of the system stopped and masked while it is on
+      (masked for the current boot only, in `/run`: turned off, it leaves
+      nothing behind);
+    - `Setup=`, a script run once, at the first boot with it on;
+    - `Cleanup=`, a script run when it is turned off or removed (only if
+      its `Setup=` ran), to undo what `Setup=` did; turned on again,
+      `Setup=` runs again;
+    - `Boot=`, a script run at every boot with it on.
+
+    The scripts are file names in `files/usr/lib/xeeonos/extensions/<name>/`
+    (executable), run as root with `XEEONOS_EXTENSION=<name>`; a failing
+    script is reported and the boot goes on.
 - `files/`, files of its own (only under `/usr`; defaults for `/etc` go in
   `/usr/share/factory/etc`, with a `tmpfiles.d` line that links or copies
   them).
@@ -77,7 +99,9 @@ An extension from outside: any `systemd-sysext` image whose
 ## Tests
 
 `tools/ci/extensions.sh`: the included ones are on; turning off a special one
-asks; ci-hello (unknown to the system before) is downloaded with a valid
-signature and its manifest, works, and is installed again from its file
-with the warning; an included one cannot be removed.
+asks; ci-hello (unknown to the system before) is listed among those that can
+be downloaded, is downloaded with a valid signature and its manifest, works,
+runs its hooks (Setup once, Boot, Disable masks a unit, Cleanup when
+removed), and is installed again from its file with the warning; an
+included one cannot be removed.
 `flatpak.sh` and `printing.sh` test what the included ones bring.

@@ -5,7 +5,7 @@
 //!   xeeonos_<v>.efi                              kernel (UKI)
 //!   xeeonos_<v>.usr-x86-64.<uuid>.raw.zst         /usr partition
 //!   xeeonos_<v>.usr-x86-64-verity.<uuid>.raw.zst  its dm-verity hash tree
-//!   xeeonos_<v>.<name>.xext                       optional extensions (xctl ext)
+//!   xeeonos_<v>.<name>.xext                       optional extensions (xctl extensions)
 //!   SHA256SUMS, SHA256SUMS.gpg                    manifest + signature
 //!
 //! Steps: fetch the signed manifest (a few hundred bytes), check its
@@ -189,7 +189,7 @@ pub fn run(args: &[String]) -> Result<()> {
                 "XeeonOS {new} is out, but the extension(s) {} turned on here are not \
                  published for it yet (they are built right after every version): \
                  nothing installed. Try again later, or turn them off \
-                 (sudo xctl ext disable <name>) to update without them.",
+                 (sudo xctl extensions disable <name>) to update without them.",
                 missing.join(", ")
             );
             return Ok(());
@@ -569,7 +569,7 @@ fn verify_signature(dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
 pub(crate) fn check_hashes(dir: &Path) -> Result<()> {
     let ok = Command::new("sha256sum")
         // --ignore-missing: the manifest also lists the optional extensions
-        // (xctl ext), which are downloaded only where they are turned on.
+        // (xctl extensions), which are downloaded only where they are turned on.
         .args([
             "--check",
             "--strict",

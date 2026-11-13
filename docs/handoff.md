@@ -15,8 +15,8 @@ giorno, versioni e canali, cosa resta da fare.
   `sudo xctl encryption tpm on`) e il backup della chiave di firma degli
   aggiornamenti.
 - **Desktop** (fase 3): Plasma su Wayland con SDDM, audio PipeWire,
-  Bluetooth; modulo `tools` (solo SSH, server spento); estensioni di
-  sistema (`xctl ext`: flatpak e printing incluse; quelle opzionali, podman,
+  Bluetooth; modulo `tools` (SSH, server spento, `xctl ssh-server on|off`; FUSE 2 per le AppImage); estensioni di
+  sistema (`xctl extensions`: flatpak e printing incluse; quelle opzionali, podman,
   distrobox, docker, rocm, rocm-sdk e touchpad T14, nel repository
   `xeeonos-extensions`).
   Le app `.xapp` sono da ripensare da zero.

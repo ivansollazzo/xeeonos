@@ -111,12 +111,14 @@ Commands:
                          not verified: asks first).
   ext remove <name>      Turn an optional extension off and delete it.
   app [list]             List the .xapp applications (experimental, see
-                         docs/xapp.md): directories in ~/Applications
-                         (/var/lib/xapps), in the menu by themselves.
+                         docs/xapp.md): containers ready to run, in
+                         ~/Applications (/var/lib/xapps), in the menu by
+                         themselves; and whether yours is prepared.
   app install <path>     Install a Name.xapp directory or archive
                          (administrators, no sudo needed).
   app remove <name>      Remove an application.
-  app run <name> [args]  Start an application.
+  app run <name> [args]  Start an application in its container (preparing
+                         it first, the first time).
   packages [<name>]      List the packages of this version (and their
                          versions); with <name>, only those containing it.
   setup                  First-boot setup: language, keyboard, time zone,

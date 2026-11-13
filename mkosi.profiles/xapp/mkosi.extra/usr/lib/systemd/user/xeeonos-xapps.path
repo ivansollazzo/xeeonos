@@ -1,0 +1,12 @@
+# The user's monitor of /var/lib/xapps: the container of every .xapp
+# application is made in the background (and made again for a new version,
+# deleted when the application is gone), see docs/xapp.md.
+[Unit]
+Description=Watch the .xapp applications (containers)
+
+[Path]
+PathChanged=/var/lib/xapps
+Unit=xeeonos-xapps.service
+
+[Install]
+WantedBy=default.target

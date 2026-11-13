@@ -16,9 +16,9 @@ giorno, versioni e canali, cosa resta da fare.
   aggiornamenti.
 - **Desktop** (fase 3): Plasma su Wayland con SDDM, audio PipeWire,
   Bluetooth; modulo `tools` (podman, distrobox, SSH spento); estensioni di
-  sistema (`xctl ext`: flatpak e printing incluse, docker opzionale; rocm,
-  rocm-sdk e touchpad T14 passano al repository `xeeonos-extensions`);
-  `.xapp` sperimentali, ognuna un container pronto (prova: Firefox).
+  sistema (`xctl ext`: flatpak e printing incluse; quelle opzionali, docker,
+  rocm, rocm-sdk e touchpad T14, nel repository `xeeonos-extensions`).
+  Le app `.xapp` sono da ripensare da zero.
 
 Ogni cosa ha la sua pagina in `docs/` (in inglese): `modules.md` è l'indice
 dei moduli, `extensions.md` delle estensioni.
@@ -123,8 +123,7 @@ In ordine di importanza:
    Boot, TPM, sospensione, Wi-Fi, il touchpad del T14 con l'estensione
    (da `xeeonos-extensions`).
 2. Backup della chiave di firma fuori dal PC.
-3. `.xapp`: firma, isolamento (sandbox), le ricette nel repository
-   `xeeonos-applications`, una finestra di avanzamento; oggi è sperimentale.
+3. `.xapp`: da ripensare da zero (repository `xeeonos-applications`).
 4. Flatpak preinstallati (al primo avvio o nella ISO): da decidere.
 5. Installatore grafico in Qt (oggi `xctl install-system` testuale).
 6. Logo e grafica (schermata di avvio, sfondo, SDDM).
@@ -137,8 +136,7 @@ In ordine di importanza:
   tre tentativi; niente pacman nell'immagine.
 - Solo GPU Intel, AMD e Nouveau.
 - NetworkManager; Btrfs su LUKS2 sempre (password spenta = chiave vuota).
-- App: native minime, Flatpak per il resto, `.xapp` in `/var/lib/xapps`
-  (ognuna un container, sempre in distrobox, uno per app).
+- App: native minime, Flatpak per il resto; `.xapp` da ripensare.
 - Estensioni: incluse (nell'immagine, Special) o opzionali (scaricate,
   firmate) o da file (non verificate, con avviso).
 - Nessuna compatibilità all'indietro necessaria finché si installa da zero.

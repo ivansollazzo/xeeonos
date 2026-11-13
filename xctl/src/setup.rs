@@ -503,12 +503,72 @@ fn apply(a: &Answers) -> Result<()> {
     if !child.wait()?.success() {
         return Err(err("setting the password failed"));
     }
+    // The same keyboard layout for the graphical desktop, if there is one.
+    apply_graphical_keyboard(&a.keyboard, &a.user)?;
+
     println!(
         "XeeonOS setup: created user {}{}",
         a.user,
         if a.admin { " (administrator)" } else { "" }
     );
     Ok(())
+}
+
+/// The keyboard of the graphical login screen and desktop: the X11 layout
+/// that matches the console keymap, from systemd's own table (what
+/// `localectl set-keymap` does, without needing systemd-localed running).
+/// Written to /etc/X11/xorg.conf.d/00-keyboard.conf (read by systemd-localed,
+/// so the login screen uses it) and, with KDE Plasma, to the new user's
+/// ~/.config/kxkbrc. (/etc/xdg is part of the read-only /usr.)
+fn apply_graphical_keyboard(keymap: &str, user: &str) -> Result<()> {
+    if !Path::new(PLASMA).exists() {
+        return Ok(());
+    }
+    let table = fs::read_to_string(KBD_MODEL_MAP).unwrap_or_default();
+    let Some((layout, variant)) = x11_layout(&table, keymap) else {
+        return Ok(()); // no X11 equivalent: the desktop keeps its default (us)
+    };
+    fs::create_dir_all("/etc/X11/xorg.conf.d")?;
+    let mut conf = format!(
+        "# Written by xctl setup (keyboard: {keymap}).\n\
+         Section \"InputClass\"\n        Identifier \"system-keyboard\"\n        \
+         MatchIsKeyboard \"on\"\n        Option \"XkbLayout\" \"{layout}\"\n"
+    );
+    if !variant.is_empty() {
+        conf.push_str(&format!("        Option \"XkbVariant\" \"{variant}\"\n"));
+    }
+    conf.push_str("EndSection\n");
+    fs::write("/etc/X11/xorg.conf.d/00-keyboard.conf", conf)?;
+
+    let config = Path::new("/home").join(user).join(".config");
+    fs::create_dir_all(&config)?;
+    fs::write(
+        config.join("kxkbrc"),
+        format!("[Layout]\nUse=true\nLayoutList={layout}\nVariantList={variant}\n"),
+    )?;
+    // "user:" = the user and their login group.
+    let owner = format!("{user}:");
+    run("chown", &["-R", &owner, &config.to_string_lossy()])?;
+    Ok(())
+}
+
+/// Present when the image has KDE Plasma (mkosi.profiles/plasma).
+const PLASMA: &str = "/usr/bin/plasmashell";
+/// systemd's table of console keymaps and their X11 equivalents.
+const KBD_MODEL_MAP: &str = "/usr/share/systemd/kbd-model-map";
+
+/// The X11 layout and variant for a console keymap, from kbd-model-map
+/// (lines: keymap, layout, model, variant, options; `-` for none).
+fn x11_layout(table: &str, keymap: &str) -> Option<(String, String)> {
+    table
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .map(|l| l.split_whitespace().collect::<Vec<_>>())
+        .find(|f| f.len() >= 4 && f[0] == keymap)
+        .map(|f| {
+            let variant = if f[3] == "-" { "" } else { f[3] };
+            (f[1].to_string(), variant.to_string())
+        })
 }
 
 /// Default keyboard and time zone for a language.
@@ -622,6 +682,19 @@ mod tests {
         assert!(check_hostname("my-pc").is_ok());
         assert!(check_hostname("my pc").is_err());
         assert!(check_timezone("../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn x11_layouts() {
+        let table = "# keymap layout model variant options\n\
+                     it\t\t\tit\tpc105\t\t-\t\tterminate:ctrl_alt_bksp\n\
+                     de-latin1-nodeadkeys\tde\tpc105\t\tnodeadkeys\tterminate:ctrl_alt_bksp\n";
+        assert_eq!(x11_layout(table, "it"), Some(("it".into(), "".into())));
+        assert_eq!(
+            x11_layout(table, "de-latin1-nodeadkeys"),
+            Some(("de".into(), "nodeadkeys".into()))
+        );
+        assert_eq!(x11_layout(table, "xx"), None);
     }
 
     #[test]

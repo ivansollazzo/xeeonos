@@ -39,7 +39,9 @@ snapshot of the Arch Linux Archive, set in `mkosi.conf`. mkosi uses its own Arch
 tree, so you can build from any Linux distribution.
 
 ```sh
-mkosi --force build                  # sealed disk image: mkosi.output/xeeonos_<version>.raw
+mkosi --force --profile=plasma,audio build   # sealed disk image with KDE Plasma and sound:
+                                             # mkosi.output/xeeonos_<version>.raw
+                                             # (without --profile: no desktop, text console only)
 tools/boot-test.sh mkosi.output/xeeonos_0.1.0.raw   # first boot in QEMU + `xctl status --check`
 ```
 

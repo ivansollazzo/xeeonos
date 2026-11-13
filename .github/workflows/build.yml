@@ -260,6 +260,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      pull-requests: read
     strategy:
       fail-fast: false
       matrix:
@@ -283,7 +284,22 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Targeted tests: on a pull request, a test whose files
+      # (tools/ci/affects.txt) did not change finishes green at once.
+      # Channel branches always run every test.
+      - name: Is this test touched by the pull request?
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --paginate --jq '.[].filename' > "$RUNNER_TEMP/changed.txt"
+          if ! tools/ci/affected.sh "${{ matrix.test }}" < "$RUNNER_TEMP/changed.txt" | tee -a "$GITHUB_STEP_SUMMARY"; then
+            echo "SKIP=yes" >> "$GITHUB_ENV"
+          fi
+
       - name: Install VM and ISO tools
+        if: env.SKIP != 'yes'
         run: |
           sudo apt-get update
           sudo apt-get install --assume-yes --no-install-recommends \
@@ -291,11 +307,13 @@ jobs:
 
       # The version of the images (they may come from an earlier run).
       - name: Version under test
+        if: env.SKIP != 'yes'
         run: |
           echo "VERSION=${{ needs.build.outputs.version }}" >> "$GITHUB_ENV"
           echo "NEXT=${{ needs.build.outputs.version }}.1" >> "$GITHUB_ENV"
 
       - name: Download what the build made
+        if: env.SKIP != 'yes'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: ${{ matrix.artifacts }}
@@ -304,10 +322,11 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Run tools/ci/${{ matrix.test }}.sh
+        if: env.SKIP != 'yes'
         run: tools/ci/${{ matrix.test }}.sh
 
       - name: Upload ISO
-        if: success() && matrix.test == 'iso-install'
+        if: success() && matrix.test == 'iso-install' && env.SKIP != 'yes'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: xeeonos-iso
@@ -316,7 +335,7 @@ jobs:
           compression-level: 0
 
       - name: Upload boot logs
-        if: always()
+        if: always() && env.SKIP != 'yes'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: serial-logs-${{ matrix.test }}

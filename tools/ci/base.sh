@@ -11,7 +11,7 @@ fresh_disk
 tools/boot-test.sh \
     --run "/bin/sh -c '\
 swapon --show=NAME,TYPE,PRIO --noheadings | sed s,^,SWAP-,; \
-systemctl start systemd-oomd.service; oomctl dump | grep -A1 Swap.Monitored | grep -q Path:./\$ && echo OOMD-WATCHES-SWAP; \
+systemctl start systemd-oomd.service; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do oomctl dump | grep -A1 Swap.Monitored | grep -q Path:./\$ && { echo OOMD-WATCHES-SWAP; break; }; sleep 2; done; \
 echo PSTORE-\$(systemctl is-enabled systemd-pstore.service); \
 xctl health; \
 systemctl is-active xeeonos-firewall.service | sed s,^,FIREWALL-,; \

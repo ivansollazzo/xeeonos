@@ -5,6 +5,14 @@ job made, so the jobs are independent and run in parallel
 (`.github/workflows/build.yml`, job `test`). A failed job can be re-run on its
 own with "Re-run failed jobs".
 
+**Targeted tests.** On a pull request, each test job first checks
+(`affected.sh`) whether the pull request changed a file the test depends on
+(`affects.txt`); if not, it finishes green at once, marked "not touched" in
+the job summary (so the required checks are still satisfied). Changes to
+the system's core, the build or the test machinery run every test, and so
+does any file `affects.txt` does not know (documentation aside). Pushes to
+channel branches (after a merge, before publishing) always run every test.
+
 | Script | What it tests | Uses |
 |---|---|---|
 | `update.sh` | first boot, version check without download, A/B update, rollback, automatic fallback after a broken update | disk image, next version |
@@ -26,4 +34,5 @@ own with "Re-run failed jobs".
 
 Environment: `VERSION` (and `NEXT` for update.sh) from `tools/version.sh`;
 the build job's artifacts in `build/`; boot logs go to `out/serial-*.log`.
-To add a feature's tests: add a script here and a line to the job's matrix.
+To add a feature's tests: add a script here, a line to the job's matrix and
+its paths to `affects.txt`.

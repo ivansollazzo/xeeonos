@@ -1,0 +1,4 @@
+#!/bin/sh
+# Cleanup= of the CI's test extension: when it is turned off or removed.
+rm -f /var/lib/ci-hello/setup
+echo "cleaned up" > /var/lib/ci-hello/cleanup

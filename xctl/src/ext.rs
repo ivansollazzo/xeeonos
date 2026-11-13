@@ -1,4 +1,4 @@
-//! `xctl ext`: system extensions.
+//! `xctl extensions`: system extensions.
 //!
 //! An extension adds software to /usr without changing the sealed system
 //! image: it is a small read-only image of its own, laid over /usr at boot
@@ -15,17 +15,31 @@
 //!             xeeonos-extensions and published as
 //!             ghcr.io/ivansollazzo/xeeonos-extensions:<version>
 //!             (xeeonos_<version>.<name>.xext and its manifest <name>.conf,
-//!             with a manifest signed by the update key). `xctl ext enable`
+//!             with a manifest signed by the update key). `xctl extensions enable`
 //!             downloads both into /var/lib/xeeonos/extensions/<version>/,
 //!             and `xctl update` fetches the new version's copy of every
 //!             enabled one (and waits while one is not published yet).
 //!
 //!   from a file  an extension image made by someone else, installed with
-//!             `xctl ext install <file>`: not signed, not checked by XeeonOS
+//!             `xctl extensions install <file>`: not signed, not checked by XeeonOS
 //!             (a warning says so), kept in /var/lib/xeeonos/extensions-local.
 //!
-//! What every extension is (description, Special, Default, services) is
-//! written in its manifest, <name>.conf: a copy of its extension.conf. The
+//! What every extension is (description, Special, Default, services, hooks)
+//! is written in its manifest, <name>.conf: a copy of its extension.conf.
+//!
+//! Hooks: what an extension does to the system besides adding files.
+//!
+//!   Enable=   units started while it is on (and at every boot)
+//!   Disable=  units of the system stopped and masked while it is on (the
+//!             mask is only for this boot: turned off, the extension leaves
+//!             nothing behind)
+//!   Setup=    a script run once, at the first boot with the extension on
+//!   Cleanup=  a script run when it is turned off or removed (only if its
+//!             Setup ran), to undo what Setup did
+//!   Boot=     a script run at every boot with the extension on
+//!
+//! The scripts are in the extension image, in
+//! /usr/lib/xeeonos/extensions/<name>/, and run as root. The
 //! system image holds the manifests of the included ones
 //! (/usr/lib/xeeonos/extensions), a downloaded one keeps its own next to its
 //! image, and every extension image holds its own.
@@ -49,9 +63,16 @@ pub struct Extension {
     pub special: bool,
     /// On unless the administrator turned it off.
     pub default: bool,
-    /// Units to start once the extension is in place.
+    /// Units to start once the extension is in place (Enable=).
     pub units: Vec<String>,
-    /// Installed from a file by the administrator (`xctl ext install`).
+    /// Units of the system to stop and mask while it is on (Disable=).
+    pub masks: Vec<String>,
+    /// Scripts (in /usr/lib/xeeonos/extensions/<name>/): once, at turning
+    /// off, at every boot.
+    pub setup: Option<String>,
+    pub cleanup: Option<String>,
+    pub boot: Option<String>,
+    /// Installed from a file by the administrator (`xctl extensions install`).
     pub local: bool,
 }
 
@@ -98,11 +119,25 @@ fn parse(name: &str, text: &str) -> Extension {
             "Description" => ext.description = value.to_string(),
             "Special" => ext.special = value == "yes",
             "Default" => ext.default = value == "yes",
-            "Enable" => ext.units = value.split_whitespace().map(str::to_string).collect(),
+            "Enable" => ext.units = words(value),
+            "Disable" => ext.masks = words(value),
+            "Setup" => ext.setup = script(value),
+            "Cleanup" => ext.cleanup = script(value),
+            "Boot" => ext.boot = script(value),
             _ => {}
         }
     }
     ext
+}
+
+fn words(value: &str) -> Vec<String> {
+    value.split_whitespace().map(str::to_string).collect()
+}
+
+/// A hook script's name: a plain file name in the extension's directory
+/// (anything else is ignored).
+fn script(value: &str) -> Option<String> {
+    update::is_plain_file_name(value).then(|| value.to_string())
 }
 
 /// The manifests (<name>.conf) in a directory.
@@ -146,10 +181,11 @@ pub fn known() -> Vec<Extension> {
 }
 
 fn find(name: &str) -> Result<Extension> {
-    known()
-        .into_iter()
-        .find(|e| e.name == name)
-        .ok_or_else(|| err(format!("unknown extension '{name}' (see xctl ext list)")))
+    known().into_iter().find(|e| e.name == name).ok_or_else(|| {
+        err(format!(
+            "unknown extension '{name}' (see xctl extensions list)"
+        ))
+    })
 }
 
 /// The administrator's choices: `<name>=on|off` lines in
@@ -215,30 +251,32 @@ fn running_version() -> Result<String> {
 
 pub fn run(args: &[String]) -> Result<()> {
     match args.first().map(String::as_str) {
-        None | Some("list") => list(),
+        None => list(&[]),
+        Some("list") => list(&args[1..]),
         Some("enable") => enable(&args[1..]),
         Some("disable") => disable(&args[1..]),
         Some("install") => install(&args[1..]),
         Some("remove") => remove(&args[1..]),
         Some("activate") => activate(),
         Some(other) => Err(err(format!(
-            "unknown ext command '{other}' (expected list, enable <name>, disable <name>, \
+            "unknown extensions command '{other}' (expected list, enable <name>, disable <name>, \
              install <file> or remove <name>)"
         ))),
     }
 }
 
-/// `xctl ext list`
-fn list() -> Result<()> {
-    let all = known();
-    if all.is_empty() {
-        println!("This version of XeeonOS has no extensions.");
-        return Ok(());
-    }
+/// `xctl extensions list [--from <source>] [--keyring <file>] [--offline]`:
+/// the installed extensions (those of this version, the downloaded ones and
+/// those from a file), then those that can be downloaded for this version:
+/// their manifests, published with the signed manifest of the extensions'
+/// registry.
+fn list(args: &[String]) -> Result<()> {
+    let (from, keyrings, offline) = source_options(args, &["--offline"])?;
     let version = running_version()?;
+    let all = known();
     let choices = choices();
     let active = active_now();
-    let width = all.iter().map(|e| e.name.len()).max().unwrap_or(0);
+    let mut rows = Vec::new();
     for ext in &all {
         let on = is_on(ext, &choices);
         let running = active.contains(&ext.name);
@@ -256,13 +294,124 @@ fn list() -> Result<()> {
             (false, false, true) => "optional, special",
             (false, false, false) => "optional",
         };
-        println!(
-            "{:<width$}  {state:<27}  {} ({kind})",
-            ext.name, ext.description
-        );
+        rows.push((
+            ext.name.clone(),
+            state.to_string(),
+            format!("{} ({kind})", ext.description),
+        ));
     }
-    println!("Turn on or off with: sudo xctl ext enable|disable <name>");
+
+    // What can be downloaded: not when offline, or asked not to look.
+    let mut more = Vec::new();
+    let mut note = None;
+    if offline {
+        note = Some("not checked (--offline)".to_string());
+    } else {
+        let source = Source::parse(&from.unwrap_or_else(|| default_source(&version)));
+        if !matches!(source, Source::Dir(_)) && !network_up() {
+            note = Some("not checked: no network".to_string());
+        } else {
+            match published(&source, &version, &keyrings) {
+                Ok(list) => {
+                    more = list
+                        .into_iter()
+                        .filter(|e| !all.iter().any(|a| a.name == e.name))
+                        .collect()
+                }
+                Err(e) => note = Some(format!("could not be checked ({e})")),
+            }
+        }
+    }
+    for ext in &more {
+        let kind = if ext.special {
+            "optional, special"
+        } else {
+            "optional"
+        };
+        rows.push((
+            ext.name.clone(),
+            String::new(),
+            format!("{} ({kind})", ext.description),
+        ));
+    }
+    let width = rows.iter().map(|r| r.0.len()).max().unwrap_or(0);
+    let row = |(name, state, what): &(String, String, String)| {
+        println!("  {name:<width$}  {state:<27}  {what}");
+    };
+
+    println!("Installed:");
+    if all.is_empty() {
+        println!("  none");
+    }
+    rows.iter().take(all.len()).for_each(row);
+    println!("Can be downloaded for XeeonOS {version}:");
+    match (&note, more.is_empty()) {
+        (Some(note), _) => println!("  {note}"),
+        (None, true) => println!("  none"),
+        (None, false) => rows.iter().skip(all.len()).for_each(row),
+    }
+    println!("Turn on or off with: sudo xctl extensions enable|disable <name>");
     Ok(())
+}
+
+/// Is there a network connection (asked once, without waiting)?
+fn network_up() -> bool {
+    std::process::Command::new("nm-online")
+        .args(["--quiet", "--timeout=3"])
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+/// The options shared by list and enable: --from <source>,
+/// --keyring <file>, and the flags in `flags` (true if one was given).
+fn source_options(args: &[String], flags: &[&str]) -> Result<(Option<String>, Vec<PathBuf>, bool)> {
+    let mut from = None;
+    let mut keyrings = vec![PathBuf::from(config::KEYRING)];
+    let mut flag = false;
+    let mut it = args.iter();
+    while let Some(arg) = it.next() {
+        match arg.as_str() {
+            "--from" => {
+                from = Some(
+                    it.next()
+                        .ok_or_else(|| err("--from needs a source"))?
+                        .clone(),
+                )
+            }
+            "--keyring" => keyrings.push(PathBuf::from(
+                it.next().ok_or_else(|| err("--keyring needs a file"))?,
+            )),
+            other if flags.contains(&other) => flag = true,
+            other => return Err(err(format!("unknown option: {other}"))),
+        }
+    }
+    Ok((from, keyrings, flag))
+}
+
+/// The manifests of the optional extensions published for `version` at
+/// `source`: every <name>.conf listed in its signed manifest next to the
+/// image xeeonos_<version>.<name>.xext, checked against it.
+fn published(source: &Source, version: &str, keyrings: &[PathBuf]) -> Result<Vec<Extension>> {
+    let dir = std::env::temp_dir().join(format!("xctl-ext-list-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir)?;
+    let _cleanup = update::Cleanup(&dir);
+    update::fetch_manifest(source, &dir, keyrings)?;
+    let names = update::manifest_files(&fs::read_to_string(dir.join("SHA256SUMS"))?)?;
+    let confs: Vec<String> = names
+        .iter()
+        .filter_map(|n| n.strip_suffix(".conf"))
+        .filter(|name| names.contains(&update_file(version, name)))
+        .map(|name| format!("{name}.conf"))
+        .collect();
+    if confs.is_empty() {
+        return Ok(Vec::new());
+    }
+    update::fetch_files(source, &dir, &confs)?;
+    update::check_hashes(&dir)?;
+    let mut list = manifests(&dir);
+    list.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(list)
 }
 
 /// The extensions laid over /usr right now (the links made by `activate`).
@@ -278,30 +427,17 @@ fn active_now() -> Vec<String> {
     names
 }
 
-/// `xctl ext enable <name> [--from <source>] [--keyring <file>]`
+/// `xctl extensions enable <name> [--from <source>] [--keyring <file>]`
 fn enable(args: &[String]) -> Result<()> {
-    let mut name = None;
-    let mut from = None;
-    let mut keyrings = vec![PathBuf::from(config::KEYRING)];
-    let mut it = args.iter();
-    while let Some(arg) = it.next() {
-        match arg.as_str() {
-            "--from" => {
-                from = Some(
-                    it.next()
-                        .ok_or_else(|| err("--from needs a source"))?
-                        .clone(),
-                )
-            }
-            "--keyring" => keyrings.push(PathBuf::from(
-                it.next().ok_or_else(|| err("--keyring needs a file"))?,
-            )),
-            other if name.is_none() && !other.starts_with('-') => name = Some(other.to_string()),
-            other => return Err(err(format!("unknown option for ext enable: {other}"))),
-        }
-    }
-    let name = name.ok_or_else(|| err("usage: xctl ext enable <name> (see xctl ext list)"))?;
-    need_root("ext enable")?;
+    // The name first, then the options.
+    let (name, options) = match args.split_first() {
+        Some((name, rest)) if !name.starts_with('-') => (Some(name.clone()), rest),
+        _ => (None, args),
+    };
+    let (from, keyrings, _) = source_options(options, &[])?;
+    let name =
+        name.ok_or_else(|| err("usage: xctl extensions enable <name> (see xctl extensions list)"))?;
+    need_root("extensions enable")?;
     let version = running_version()?;
     // The copy built for the running version: by default from the
     // extensions' registry, where every version has its own tag.
@@ -411,7 +547,7 @@ pub fn prune(keep: &[String]) {
     }
 }
 
-/// `xctl ext disable <name> [--yes]`
+/// `xctl extensions disable <name> [--yes]`
 fn disable(args: &[String]) -> Result<()> {
     let mut name = None;
     let mut yes = false;
@@ -419,11 +555,16 @@ fn disable(args: &[String]) -> Result<()> {
         match arg.as_str() {
             "--yes" => yes = true,
             other if name.is_none() && !other.starts_with('-') => name = Some(other.to_string()),
-            other => return Err(err(format!("unknown option for ext disable: {other}"))),
+            other => {
+                return Err(err(format!(
+                    "unknown option for extensions disable: {other}"
+                )));
+            }
         }
     }
-    let name = name.ok_or_else(|| err("usage: xctl ext disable <name> (see xctl ext list)"))?;
-    need_root("ext disable")?;
+    let name = name
+        .ok_or_else(|| err("usage: xctl extensions disable <name> (see xctl extensions list)"))?;
+    need_root("extensions disable")?;
     let ext = find(&name)?;
 
     if ext.special {
@@ -451,11 +592,12 @@ fn disable(args: &[String]) -> Result<()> {
         }
     }
     set_choice(&name, false)?;
+    clean_up(&ext);
     println!("Extension {name}: off, from the next restart.");
     Ok(())
 }
 
-/// `xctl ext install <file> [--yes]`: an extension image from a file. Nobody
+/// `xctl extensions install <file> [--yes]`: an extension image from a file. Nobody
 /// signed it and XeeonOS cannot check it: say so and ask first.
 fn install(args: &[String]) -> Result<()> {
     let mut file = None;
@@ -464,11 +606,15 @@ fn install(args: &[String]) -> Result<()> {
         match arg.as_str() {
             "--yes" => yes = true,
             other if file.is_none() && !other.starts_with('-') => file = Some(PathBuf::from(other)),
-            other => return Err(err(format!("unknown option for ext install: {other}"))),
+            other => {
+                return Err(err(format!(
+                    "unknown option for extensions install: {other}"
+                )));
+            }
         }
     }
-    let file = file.ok_or_else(|| err("usage: xctl ext install <file.xext> [--yes]"))?;
-    need_root("ext install")?;
+    let file = file.ok_or_else(|| err("usage: xctl extensions install <file.xext> [--yes]"))?;
+    need_root("extensions install")?;
     if !file.is_file() {
         return Err(err(format!("{} is not a file", file.display())));
     }
@@ -482,7 +628,7 @@ fn install(args: &[String]) -> Result<()> {
             .exists()
     {
         return Err(err(format!(
-            "an extension named {name} is already part of XeeonOS (see xctl ext list)"
+            "an extension named {name} is already part of XeeonOS (see xctl extensions list)"
         )));
     }
 
@@ -559,23 +705,39 @@ fn manifest_inside(image: &Path) -> Result<Extension> {
 
 /// A manifest as text again (what `parse` reads).
 fn manifest_text(ext: &Extension) -> String {
-    format!(
-        "Description=\"{}\"\nSpecial={}\nDefault=no\nEnable=\"{}\"\n",
+    let mut text = format!(
+        "Description=\"{}\"\nSpecial={}\nDefault=no\nEnable=\"{}\"\nDisable=\"{}\"\n",
         ext.description.replace('"', "'"),
         if ext.special { "yes" } else { "no" },
-        ext.units.join(" ")
-    )
+        ext.units.join(" "),
+        ext.masks.join(" ")
+    );
+    for (key, value) in [
+        ("Setup", &ext.setup),
+        ("Cleanup", &ext.cleanup),
+        ("Boot", &ext.boot),
+    ] {
+        if let Some(value) = value {
+            text.push_str(&format!("{key}={value}\n"));
+        }
+    }
+    text
 }
 
-/// `xctl ext remove <name>`: turn an optional extension off and delete its
+/// `xctl extensions remove <name>`: turn an optional extension off and delete its
 /// images (downloaded, or installed from a file). An included one is part of the system image: it can
 /// only be turned off.
 fn remove(args: &[String]) -> Result<()> {
     let [name] = args else {
-        return Err(err("usage: xctl ext remove <name> (see xctl ext list)"));
+        return Err(err(
+            "usage: xctl extensions remove <name> (see xctl extensions list)",
+        ));
     };
-    need_root("ext remove")?;
+    need_root("extensions remove")?;
     let ext = find(name)?;
+    if ext.included_image().is_none() {
+        clean_up(&ext);
+    }
     if ext.local {
         let dir = Path::new(config::EXTENSIONS_LOCAL);
         let _ = fs::remove_file(dir.join(format!("{name}.xext")));
@@ -583,7 +745,7 @@ fn remove(args: &[String]) -> Result<()> {
     } else if ext.included_image().is_some() {
         return Err(err(format!(
             "{name} is included in the system and cannot be removed; \
-             turn it off with: sudo xctl ext disable {name}"
+             turn it off with: sudo xctl extensions disable {name}"
         )));
     }
     if let Ok(dir) = fs::read_dir(config::EXTENSIONS_STORE) {
@@ -598,17 +760,18 @@ fn remove(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// `xctl ext activate`: run once at every boot (xeeonos-extensions.service),
+/// `xctl extensions activate`: run once at every boot (xeeonos-extensions.service),
 /// before the services start. Lays the extensions that are on over /usr and
 /// brings in what they add: users, device rules, units.
 fn activate() -> Result<()> {
-    need_root("ext activate")?;
+    need_root("extensions activate")?;
     let version = running_version()?;
     let choices = choices();
     let run = Path::new(config::EXTENSIONS_RUN);
     let mut units = Vec::new();
     let mut active = Vec::new();
     let mut local = Vec::new();
+    let mut hooked = Vec::new();
     for ext in known() {
         if !is_on(&ext, &choices) {
             continue;
@@ -616,7 +779,7 @@ fn activate() -> Result<()> {
         let Some(image) = ext.image(&version) else {
             println!(
                 "Extension {}: on, but not downloaded for XeeonOS {version} \
-                 (sudo xctl ext enable {})",
+                 (sudo xctl extensions enable {})",
                 ext.name, ext.name
             );
             continue;
@@ -628,8 +791,9 @@ fn activate() -> Result<()> {
         if ext.local {
             local.push((ext.name.clone(), link, ext.units.clone()));
         }
-        units.extend(ext.units);
-        active.push(ext.name);
+        units.extend(ext.units.iter().cloned());
+        active.push(ext.name.clone());
+        hooked.push(ext);
     }
     if active.is_empty() {
         return Ok(());
@@ -649,6 +813,7 @@ fn activate() -> Result<()> {
         if active.is_empty() {
             return Ok(());
         }
+        hooked.retain(|e| active.contains(&e.name));
         run_program("systemd-sysext", &["refresh"])?;
     }
     // Users and groups of the extensions (the boot's own run came before).
@@ -656,6 +821,34 @@ fn activate() -> Result<()> {
     let _ = run_program("udevadm", &["control", "--reload"]);
     // systemd read its units before the extensions were there.
     run_program("systemctl", &["daemon-reload"])?;
+    // Disable=: units of the system that must not run next to it, masked
+    // for this boot only (/run).
+    let masks: Vec<&str> = hooked
+        .iter()
+        .flat_map(|e| e.masks.iter().map(String::as_str))
+        .collect();
+    if !masks.is_empty() {
+        let mut args = vec!["mask", "--runtime", "--now"];
+        args.extend(masks.iter());
+        if run_program("systemctl", &args).is_err() {
+            println!("Extensions: could not mask {}", masks.join(" "));
+        }
+    }
+    for ext in &hooked {
+        // Setup=: once (until the extension is turned off).
+        if let Some(script) = &ext.setup {
+            let marker = setup_marker(&ext.name);
+            if !marker.exists() && run_hook(&ext.name, "Setup", script) {
+                fs::create_dir_all(config::EXTENSIONS_SETUP)?;
+                fs::write(&marker, "")?;
+                println!("Extension {}: set up", ext.name);
+            }
+        }
+        // Boot=: every boot.
+        if let Some(script) = &ext.boot {
+            run_hook(&ext.name, "Boot", script);
+        }
+    }
     if !units.is_empty() {
         let mut args = vec!["start", "--no-block"];
         args.extend(units.iter().map(String::as_str));
@@ -663,6 +856,61 @@ fn activate() -> Result<()> {
     }
     println!("Extensions: {}", active.join(", "));
     Ok(())
+}
+
+/// Where an extension's hook scripts are (inside its image, so only while
+/// it is laid over /usr).
+fn hook_path(name: &str, script: &str) -> PathBuf {
+    Path::new(config::EXTENSIONS).join(name).join(script)
+}
+
+fn setup_marker(name: &str) -> PathBuf {
+    Path::new(config::EXTENSIONS_SETUP).join(name)
+}
+
+/// Run one hook script of `name`; a failure is reported, not fatal (the
+/// rest of the system must still start).
+fn run_hook(name: &str, kind: &str, script: &str) -> bool {
+    let path = hook_path(name, script);
+    if !path.is_file() {
+        println!(
+            "Extension {name}: its {kind} script {} is missing",
+            path.display()
+        );
+        return false;
+    }
+    let ok = std::process::Command::new(&path)
+        .env("XEEONOS_EXTENSION", name)
+        .status()
+        .is_ok_and(|s| s.success());
+    if !ok {
+        println!("Extension {name}: its {kind} script failed");
+    }
+    ok
+}
+
+/// What an extension does when it is turned off or removed: run its Cleanup
+/// script, if its Setup ran. The script is still there: the extension stays
+/// laid over /usr until the next restart.
+fn clean_up(ext: &Extension) {
+    let marker = setup_marker(&ext.name);
+    if !marker.exists() {
+        return;
+    }
+    if let Some(script) = &ext.cleanup {
+        if active_now().contains(&ext.name) {
+            if run_hook(&ext.name, "Cleanup", script) {
+                println!("Extension {}: cleaned up", ext.name);
+            }
+        } else {
+            println!(
+                "Extension {}: not in use, its Cleanup script cannot run",
+                ext.name
+            );
+        }
+    }
+    // Turned on again later, its Setup runs again.
+    let _ = fs::remove_file(marker);
 }
 
 /// One line for `xctl status`: the extensions in use.
@@ -688,6 +936,24 @@ mod tests {
         assert_eq!(ext.units, vec!["docker.socket", "containerd.service"]);
         let ext = parse("flatpak", "Special=yes\nDefault=yes\n");
         assert!(ext.special && ext.default && ext.units.is_empty());
+    }
+
+    #[test]
+    fn hooks() {
+        let ext = parse(
+            "ci-hello",
+            "Disable=\"a.timer b.service\"\nSetup=setup\nCleanup=\"cleanup\"\nBoot=../boot\n",
+        );
+        assert_eq!(ext.masks, vec!["a.timer", "b.service"]);
+        assert_eq!(ext.setup.as_deref(), Some("setup"));
+        assert_eq!(ext.cleanup.as_deref(), Some("cleanup"));
+        // Not a plain file name: ignored.
+        assert_eq!(ext.boot, None);
+        // Written again for an extension from a file, read back the same.
+        let again = parse("ci-hello", &manifest_text(&ext));
+        assert_eq!(again.masks, ext.masks);
+        assert_eq!(again.setup, ext.setup);
+        assert_eq!(again.cleanup, ext.cleanup);
     }
 
     #[test]

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Boot= of the CI's test extension: at every boot with it on.
+echo "$XEEONOS_EXTENSION" > /run/ci-hello-boot

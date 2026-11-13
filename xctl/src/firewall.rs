@@ -90,7 +90,7 @@ fn parse_port(text: &str) -> Result<String> {
     Ok(format!("{n}/{proto}"))
 }
 
-fn allowed() -> Result<Vec<String>> {
+pub(crate) fn allowed() -> Result<Vec<String>> {
     let text = fs::read_to_string(ALLOW_FILE).unwrap_or_default();
     text.lines()
         .map(str::trim)
@@ -99,7 +99,7 @@ fn allowed() -> Result<Vec<String>> {
         .collect()
 }
 
-fn save(list: &[String]) -> Result<()> {
+pub(crate) fn save(list: &[String]) -> Result<()> {
     if let Some(dir) = Path::new(ALLOW_FILE).parent() {
         fs::create_dir_all(dir)?;
     }
@@ -148,7 +148,7 @@ fn ruleset(allowed: &[String]) -> String {
 }
 
 /// Replace the rules in the kernel with the current ones.
-fn load() -> Result<()> {
+pub(crate) fn load() -> Result<()> {
     let rules = ruleset(&allowed()?);
     let mut child = Command::new("nft")
         .args(["-f", "-"])

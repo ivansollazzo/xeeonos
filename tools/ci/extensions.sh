@@ -55,7 +55,7 @@ xctl extensions list --offline | sed s,^,AFTER-,
     --expect "ASK-.*special extension and there is no terminal" \
     --expect "Signature: valid" \
     --expect "Extension ci-hello: on, from the next restart" \
-    --expect "AFTER-ci-hello +on \(from the next restart\)"
+    --expect "AFTER- +ci-hello +on \(from the next restart\)"
 
 step 2 "
 xeeonos-hello | sed s,^,HELLO-,

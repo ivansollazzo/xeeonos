@@ -62,9 +62,8 @@ Attach it to the [bug report](https://github.com/ivansollazzo/xeeonos/issues).
 
 ## Arch snapshot
 
-`.github/workflows/snapshot.yml`, started by hand for now (Actions → Arch
-snapshot → Run workflow; how often it runs by itself is still to decide),
-opens (or updates) one pull
+`.github/workflows/snapshot.yml` runs every Monday (and by hand: Actions →
+Arch snapshot → Run workflow). It opens (or updates) one pull
 request that moves `Snapshot=` in `mkosi.conf` to the newest Arch Linux
 Archive date. Its description lists the Arch news published since the
 current snapshot and the packages of XeeonOS that change

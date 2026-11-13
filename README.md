@@ -31,6 +31,7 @@ feature in parallel ([tools/ci/](tools/ci/README.md)). The base version lives in
 XeeonOS is assembled from independent modules: core modules in `mkosi.conf.d/`
 are always included, optional ones in `mkosi.profiles/` are picked with
 `mkosi --profile=...`. See [docs/modules.md](docs/modules.md).
+How to keep working on it (in Italian): [docs/handoff.md](docs/handoff.md).
 
 ## Building
 

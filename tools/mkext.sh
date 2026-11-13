@@ -39,7 +39,9 @@ mkdir -p "$work/cache"
 cp "$pkgdb" "$work/pkgdb.tar"
 
 # 1. Install: one tree per extension in $work/tree/<name>.
-docker run --rm \
+# (apparmor=unconfined: the CI runner has no AppArmor tools, which docker
+# would need to load its default profile.)
+docker run --rm --security-opt apparmor=unconfined \
     --volume "$PWD:/src:ro" --volume "$work:/work" \
     "${MKEXT_IMAGE:-archlinux:base}" \
     /bin/bash /src/tools/mkext-install.sh "$snapshot"

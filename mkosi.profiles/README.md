@@ -5,6 +5,5 @@ Each directory here is an optional XeeonOS module (an mkosi profile), enabled wi
 and, when needed, `mkosi.extra/` (files), `mkosi.postinst` (setup script) and so on.
 
 Modules: `live` (the live ISO), `plasma` (KDE Plasma desktop), `audio`
-(sound: PipeWire).
-Planned: `flatpak` (Flatpak + Flathub), `xapp` (`.xapp` applications), `dev`
-(distrobox and podman).
+(sound: PipeWire), `flatpak` (applications from Flathub).
+Planned: `xapp` (`.xapp` applications), `printing` (printers).

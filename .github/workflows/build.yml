@@ -146,7 +146,7 @@ jobs:
         if: env.REUSE != 'yes'
         run: |
           mkdir -p mkosi.cache mkosi.pkgcache out/disk-image
-          mkosi $SECUREBOOT --force --profile=plasma,audio --image-version="$VERSION" build
+          mkosi $SECUREBOOT --force --profile=plasma,audio,flatpak --image-version="$VERSION" build
           ls -lhs mkosi.output/
           zstd -T0 --quiet "mkosi.output/xeeonos_$VERSION.raw" -o "out/disk-image/xeeonos_$VERSION.raw.zst"
           tools/mkupdate.sh mkosi.output "$VERSION" out/update-system
@@ -155,7 +155,7 @@ jobs:
       - name: Build the next version (for the update test)
         if: env.REUSE != 'yes'
         run: |
-          mkosi $SECUREBOOT --force --profile=plasma,audio --image-version="$NEXT" build
+          mkosi $SECUREBOOT --force --profile=plasma,audio,flatpak --image-version="$NEXT" build
           tools/mkupdate.sh mkosi.output "$NEXT" out/update-next
           rm -rf mkosi.output
 
@@ -232,6 +232,7 @@ jobs:
           - {test: hibernate, artifacts: disk-image}
           - {test: desktop, artifacts: disk-image}
           - {test: tools, artifacts: disk-image}
+          - {test: flatpak, artifacts: disk-image}
           - {test: secureboot, artifacts: '{disk-image,update-next}'}
           - {test: iso-install, artifacts: '{live,update-system}'}
           - {test: iso-alongside, artifacts: '{live,update-system}'}

@@ -13,8 +13,10 @@ The published XeeonOS images have the KDE Plasma desktop (module
   system, the same for every desktop;
 - the applications that must be part of the system: **Konsole** (terminal),
   **Dolphin** (files), **Spectacle** (screenshots), **System Monitor**
-  (processes and resources) and **Ark** (archives). More applications will
-  come as `.xapp` bundles and from Flatpak, not inside the system image;
+  (processes and resources) and **Ark** (archives). Every other application
+  comes from Flathub, with **Discover** as the app store (module `flatpak`,
+  see [flatpak.md](flatpak.md)), and later as `.xapp` bundles, not inside
+  the system image;
 - graphics with Mesa for Intel, AMD and Nouveau (OpenGL, Vulkan, video
   decoding);
 - Noto fonts for every language, emoji included.

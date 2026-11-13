@@ -71,10 +71,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The version, and the run whose artifacts the tests use: this one, or
-      # (pull requests) the previous failed run when the images would be the
-      # same. image-key.txt records "<fingerprint> <version> <run>" for the
+      # (pull requests) the previous failed or cancelled run when the images
+      # would be the same. image-key.txt records "<fingerprint> <version> <run>" for the
       # next run to compare.
-      - name: Build, or reuse the images of the last failed run
+      - name: Build, or reuse the images of the last failed or cancelled run
         id: images
         env:
           GH_TOKEN: ${{ github.token }}
@@ -84,11 +84,18 @@ jobs:
           version=$(tools/version.sh)
           run=$GITHUB_RUN_ID
           if [[ $GITHUB_EVENT_NAME == pull_request ]]; then
-            # The newest finished run of this pull request (cancelled runs
-            # are skipped): only a failed one is reused.
-            prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?branch=$GITHUB_HEAD_REF&event=pull_request&status=completed&per_page=10" \
-              --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID and .conclusion != \"cancelled\")][0] | select(.conclusion == \"failure\") | .id")
-            if [[ -n $prev ]] && gh run download "$prev" --name image-key --dir "$RUNNER_TEMP/prev" 2>/dev/null; then
+            # The newest finished run of this pull request that did not pass,
+            # failed or cancelled (a push cancels the run it replaces), and
+            # whose images were built: its image-key artifact says which.
+            prev=""
+            for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?branch=$GITHUB_HEAD_REF&event=pull_request&status=completed&per_page=10" \
+              --jq ".workflow_runs[] | select(.id != $GITHUB_RUN_ID) | select(.conclusion == \"failure\" or .conclusion == \"cancelled\") | .id"); do
+              if gh run download "$id" --name image-key --dir "$RUNNER_TEMP/prev" 2>/dev/null; then
+                prev=$id
+                break
+              fi
+            done
+            if [[ -n $prev ]]; then
               read -r prev_key prev_version prev_run < "$RUNNER_TEMP/prev/image-key.txt"
               # Its images must still be there (artifacts are kept 3 days).
               have=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$prev_run/artifacts?per_page=100" \
@@ -97,7 +104,7 @@ jobs:
                 version=$prev_version
                 run=$prev_run
                 echo "REUSE=yes" >> "$GITHUB_ENV"
-                echo "Images reused from run $prev_run (XeeonOS $version): nothing that goes into them changed since the failed run $prev." >> "$GITHUB_STEP_SUMMARY"
+                echo "Images reused from run $prev_run (XeeonOS $version): nothing that goes into them changed since run $prev." >> "$GITHUB_STEP_SUMMARY"
               fi
             fi
           fi

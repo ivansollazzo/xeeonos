@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# Extension rocm-sdk (extensions/rocm-sdk): downloaded and turned on, ROCm is
-# in /opt/rocm, its libraries are found, hipcc compiles a program. The
-# virtual machine has no AMD GPU: nothing runs on one.
+# Extensions rocm and rocm-sdk (extensions/rocm*, docs/rocm.md). The virtual
+# machine has no AMD GPU: nothing runs on one.
+#   1. rocm is downloaded and turned on (2.8 GB; on a larger disk)
+#   2. ROCm is there: /opt/rocm, its libraries, rocminfo, rocm-smi
+#   3. rocm-sdk (about 12 GB, too large to download inside the slow
+#      virtual machine) is checked here, mounted: hipcc, the math
+#      libraries, the headers for compiling, its compatibility level
 source "$(dirname "$0")/common.sh"
+export DISK_SIZE=40G
 fresh_disk
 system=$(dirname "$(find build -name SHA256SUMS -path '*update-system*' -print -quit)")
 export GNUPGHOME=$RUNNER_TEMP/test-gnupg
@@ -12,10 +17,10 @@ gpg --export > "$RUNNER_TEMP/test-keyring.gpg"
 gpg --batch --yes --local-user "XeeonOS CI test key" --detach-sign \
     --output "$system/SHA256SUMS.gpg" "$system/SHA256SUMS"
 
-echo "::group::1. Turn rocm-sdk on"
+echo "::group::1. Turn rocm on"
 tools/boot-test.sh --http "$system" --credential "xctl.keyring=$RUNNER_TEMP/test-keyring.gpg" \
-    --run "/bin/sh -c 'systemctl start network-online.target && xctl ext enable rocm-sdk --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring'" \
-    --expect "Extension rocm-sdk: on, from the next restart" \
+    --run "/bin/sh -c 'systemctl start network-online.target && xctl ext enable rocm --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring'" \
+    --expect "Extension rocm: on, from the next restart" \
     out/disk.raw out/serial-rocm-1.log
 echo "::endgroup::"
 
@@ -23,23 +28,40 @@ echo "::group::2. ROCm is there"
 cat > out/rocm-test.sh <<'SCRIPT'
 readlink -f /opt/rocm | sed s,^,OPT-,
 ldconfig -p | grep -q libamdhip64 && echo LIB-amdhip64
-/opt/rocm/bin/hipcc --version | grep -m1 HIP | sed s,^,HIPCC-,
-cat > /tmp/add.hip <<'HIP'
-#include <hip/hip_runtime.h>
-__global__ void add(int *x) { x[threadIdx.x] += 1; }
-int main() { return 0; }
-HIP
-/opt/rocm/bin/hipcc --offload-arch=gfx1100 -o /tmp/add /tmp/add.hip && echo COMPILED-ok
+ldconfig -p | grep -q libOpenCL && echo LIB-opencl
 command -v rocminfo | sed s,^,ROCMINFO-,
+command -v rocm-smi | sed s,^,SMI-,
 xctl status --check
 SCRIPT
 tools/boot-test.sh --credential rocm-test=out/rocm-test.sh \
     --run "/bin/sh /run/credentials/@system/rocm-test" \
     --expect "OPT-/usr/lib/xeeonos/opt/rocm" \
     --expect "LIB-amdhip64" \
-    --expect "HIPCC-HIP version" \
-    --expect "COMPILED-ok" \
+    --expect "LIB-opencl" \
     --expect "ROCMINFO-.*rocminfo" \
+    --expect "SMI-.*rocm-smi" \
     --expect "check: sealed system OK" \
     out/disk.raw out/serial-rocm-2.log
+echo "::endgroup::"
+
+echo "::group::3. rocm-sdk"
+sdk=$(find "$system" -name '*.rocm-sdk.xext' -print -quit)
+[[ -n $sdk ]] || { echo "no rocm-sdk.xext in $system" >&2; exit 1; }
+ls -lh "$sdk"
+mnt=$RUNNER_TEMP/rocm-sdk
+mkdir -p "$mnt"
+sudo mount -t erofs -o loop,ro "$sdk" "$mnt"
+trap 'sudo umount "$mnt"' EXIT
+check() { # <what> <path inside the extension, glob>
+    if compgen -G "$mnt/$2" >/dev/null; then echo "ok: $1"; else echo "FAIL: $1 ($2 missing)" >&2; exit 1; fi
+}
+check hipcc 'usr/lib/xeeonos/opt/rocm/bin/hipcc'
+check "HIP headers" 'usr/lib/xeeonos/opt/rocm/include/hip/hip_runtime.h'
+check rocBLAS 'usr/lib/xeeonos/opt/rocm/lib/librocblas.so*'
+check rocFFT 'usr/lib/xeeonos/opt/rocm/lib/librocfft.so*'
+check "C library headers" 'usr/include/stdio.h'
+check "kernel API headers" 'usr/include/linux/types.h'
+check gcc 'usr/bin/gcc'
+cat "$mnt/usr/lib/extension-release.d/extension-release.rocm-sdk"
+grep -q '^ID=xeeonos$' "$mnt/usr/lib/extension-release.d/extension-release.rocm-sdk"
 echo "::endgroup::"

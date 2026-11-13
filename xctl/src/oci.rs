@@ -88,11 +88,6 @@ impl Artifact {
         result
     }
 
-    /// The names of the files in the artifact.
-    pub fn file_names(&self) -> Vec<String> {
-        self.files.keys().cloned().collect()
-    }
-
     /// Download the file called `name` into `to`.
     pub fn download(&self, name: &str, to: &Path) -> Result<()> {
         let digest = self
@@ -205,11 +200,11 @@ mod tests {
     #[test]
     fn references() {
         assert_eq!(
-            parse_reference("ghcr.io/ivansollazzo/xeeonos:1.0-beta").unwrap(),
+            parse_reference("ghcr.io/ivansollazzo/xeeonos:testing").unwrap(),
             Reference {
                 registry: "ghcr.io".into(),
                 repository: "ivansollazzo/xeeonos".into(),
-                tag: "1.0-beta".into()
+                tag: "testing".into()
             }
         );
         assert!(parse_reference("xeeonos").is_err());

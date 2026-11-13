@@ -88,11 +88,9 @@ Commands:
                          The running version is marked as bad and will not
                          be started (or installed) again.
   channel                Show the update channel.
-  channel list           List the channels published (needs the network):
-                         experimental, one per minor version and stage
-                         (e.g. 1.0-stable, 1.1-beta, 2.0-alpha), and
-                         stable, beta, alpha, which follow the newest
-                         version.
+  channel list           List the channels (needs the network): stable
+                         (fixed versions YY.MM.S), testing (what comes
+                         next), experimental (free development).
   channel set <name>     Switch to the channel <name> (only one that exists).
   channel reset          Go back to the channel this version was built for.
   ext [list]             List the system extensions: software added on top of

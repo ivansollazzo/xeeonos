@@ -20,6 +20,18 @@ wait_for() { # <user> <process>: up to 3 minutes
 systemctl start --no-block graphical.target
 wait_for sddm kwin_wayland
 pgrep -u sddm -l -x kwin_wayland | sed s,^,GREETER-,
+# If the login screen is not there, say why in the log.
+if ! pgrep -u sddm -x kwin_wayland >/dev/null; then
+    {
+        ps -eo user:12,pid,comm | grep -E 'sddm|kwin|USER'
+        loginctl list-sessions --no-pager
+        getent passwd sddm
+        ls -ld /var/lib/sddm /run/user/*
+        systemctl status --no-pager -n 0 "user@$(id -u sddm).service" sddm.service
+        journalctl -b --no-pager -n 120 -u sddm.service -u "user@$(id -u sddm).service" \
+            -t sddm -t sddm-helper -t sddm-greeter-qt6 -t kwin_wayland -t kwin_wayland_wrapper
+    } 2>&1 | cut -c1-300 | sed s,^,DIAG-,
+fi
 systemctl is-active display-manager.service | sed s,^,SDDM-,
 localectl status | grep 'X11 Layout' | sed s,^,KB-,
 sed s,^,KXKB-, /home/test/.config/kxkbrc

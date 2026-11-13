@@ -1,0 +1,38 @@
+# Which files each CI test depends on (tools/ci/affected.sh): on a pull
+# request, a test runs only if a changed file starts with one of its paths;
+# otherwise it finishes green at once ("not touched").
+#
+#   <test> <path prefix>...      (one or more lines per test)
+#   * <path prefix>...           paths every test depends on
+#
+# Safe defaults: a test with no line here always runs, and so does every
+# test when a changed file matches no line at all (docs and *.md aside).
+# On channel branches (pushes) every test always runs.
+
+# The system itself, its build, the boot, the test machinery.
+* mkosi.conf mkosi.initrd.conf mkosi.version mkosi.conf.d/base/
+* mkosi.conf.d/system/ mkosi.conf.d/xctl/ mkosi.profiles/plasma/ mkosi.profiles/audio/
+* secureboot/ .github/workflows/build.yml tools/boot-test.sh tools/ci/common.sh
+* tools/ci/affects.txt tools/ci/affected.sh tools/image-key.sh tools/version.sh
+* xctl/Cargo.toml xctl/Cargo.lock xctl/src/main.rs xctl/src/util.rs xctl/src/ui.rs
+* xctl/src/status.rs xctl/src/health.rs xctl/src/boot.rs
+
+update tools/ci/update.sh tools/mkupdate.sh xctl/src/update.rs xctl/src/oci.rs
+update xctl/src/version.rs xctl/src/channel.rs xctl/src/snapshots.rs xctl/src/ext.rs
+setup tools/ci/setup.sh xctl/src/setup.rs xctl/src/network.rs
+recovery tools/ci/recovery.sh xctl/src/recovery.rs xctl/src/install.rs xctl/src/snapshots.rs
+network tools/ci/network.sh xctl/src/network.rs xctl/src/firewall.rs
+encryption tools/ci/encryption.sh xctl/src/encryption.rs xctl/src/setup.rs
+base tools/ci/base.sh xctl/src/firewall.rs xctl/src/report.rs xctl/src/packages.rs
+snapshots tools/ci/snapshots.sh xctl/src/snapshots.rs xctl/src/update.rs
+hibernate tools/ci/hibernate.sh
+desktop tools/ci/desktop.sh
+tools tools/ci/tools.sh mkosi.conf.d/tools/
+flatpak tools/ci/flatpak.sh extensions/flatpak/ tools/mkext.sh tools/mkext-install.sh xctl/src/ext.rs
+printing tools/ci/printing.sh extensions/printing/ tools/mkext.sh tools/mkext-install.sh xctl/src/ext.rs
+extensions tools/ci/extensions.sh extensions/ tools/mkext.sh tools/mkext-install.sh
+extensions xctl/src/ext.rs xctl/src/update.rs
+secureboot tools/ci/secureboot.sh tools/secureboot.sh xctl/src/secureboot.rs
+secureboot xctl/src/encryption.rs xctl/src/update.rs
+iso-install tools/ci/iso-install.sh tools/mkiso.sh mkosi.profiles/live/ xctl/src/install.rs xctl/src/setup.rs
+iso-alongside tools/ci/iso-alongside.sh tools/mkiso.sh mkosi.profiles/live/ xctl/src/install.rs

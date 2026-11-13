@@ -1,6 +1,9 @@
 # Shared by the CI test scripts (sourced).
 set -euo pipefail
 mkdir -p out
+# How long one boot may take. Without KVM on the runner, installing an update
+# of the desktop image (about 2 GB) takes close to five minutes by itself.
+export TIMEOUT=${TIMEOUT:-900}
 
 # A fresh copy of the installed-system disk image in out/disk.raw.
 # (Found wherever it is under build/: newer versions of download-artifact put

@@ -13,8 +13,10 @@
 set -euo pipefail
 root=${1:?tree missing}
 version=0.2.4
-sha256=2a657f916d99019c4febb5ab0b704ef7d0ac4bf59d26cb539ac0710c5a82d859
-url=https://github.com/orospakr/thinkpad-t14-amd-touchpad/archive/refs/tags/v$version.tar.gz
+# The commit of the tag v0.2.4: what is built is checked against it (a tag
+# can be moved, a commit cannot).
+commit=3bb314ccb96cfb37df7b27a15434bc5198b8d6da
+repo=https://github.com/orospakr/thinkpad-t14-amd-touchpad
 
 # The kernel of the system (same snapshot, same version), its headers and
 # the tools to build, in the container. The container's own packages are
@@ -22,16 +24,16 @@ url=https://github.com/orospakr/thinkpad-t14-amd-touchpad/archive/refs/tags/v$ve
 # (downgrading), otherwise the snapshot's gcc or kernel cannot be installed
 # next to them ("could not satisfy dependencies").
 pacman --config /tmp/pacman.conf --cachedir /cache --noconfirm --needed -Syuu \
-    linux linux-headers gcc make patch zstd kmod curl >/dev/null
+    linux linux-headers gcc make patch zstd kmod git >/dev/null
 kver=$(ls /usr/lib/modules | grep -- '-arch' | head -n1)
 [[ -d /usr/lib/modules/$kver/build ]] || { echo "no headers for $kver" >&2; exit 1; }
 echo "Kernel $kver"
 
 work=$(mktemp -d)
-curl -sSfL "$url" -o "$work/src.tar.gz"
-echo "$sha256  $work/src.tar.gz" | sha256sum --check --quiet
-tar -xzf "$work/src.tar.gz" -C "$work"
 src=$work/thinkpad-t14-amd-touchpad-$version
+git -c advice.detachedHead=false clone --quiet --depth 1 --branch "v$version" "$repo" "$src"
+[[ $(git -C "$src" rev-parse HEAD) == "$commit" ]] ||
+    { echo "v$version is not commit $commit" >&2; exit 1; }
 
 # The patches, in the order of dkms.conf (PATCH[0], PATCH[1], ...).
 sed -n 's/^PATCH\[[0-9]*\]="\(.*\)"$/\1/p' "$src/dkms.conf" | while read -r p; do

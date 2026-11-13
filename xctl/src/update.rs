@@ -29,7 +29,7 @@ use crate::util::{Result, err, need_root, output, run as run_program};
 use crate::version::{compare, read_os_release};
 
 /// Where updates come from.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Source {
     /// An OCI artifact on a registry, e.g. ghcr.io/ivansollazzo/xeeonos:experimental
     Oci(String),
@@ -81,6 +81,7 @@ pub fn run(args: &[String]) -> Result<()> {
     let current = os.get("IMAGE_VERSION").cloned().unwrap_or_default();
 
     // Without --from, use the channel's tag on the registry.
+    let from_given = from.is_some();
     let source = match from {
         Some(f) => Source::parse(&f),
         None => {
@@ -96,11 +97,7 @@ pub fn run(args: &[String]) -> Result<()> {
                     "this is a development build without an update channel; use --from <source>",
                 ));
             };
-            // stable, beta, alpha: the channel with the newest version now.
             let tag = channel::resolve(&channel)?;
-            if tag != channel {
-                println!("Channel {channel}: now {tag}.");
-            }
             Source::Oci(format!("{}:{tag}", config::REGISTRY))
         }
     };
@@ -163,24 +160,52 @@ pub fn run(args: &[String]) -> Result<()> {
         return Ok(());
     }
 
-    // Only now the large files: the system, and the new version's copy of
-    // the optional extensions that are turned on here (xctl ext).
+    // The new version's copy of the optional extensions turned on here (xctl
+    // ext), published by the extensions' repository for every version (or,
+    // with --from, in the same source). If one is not published yet, wait:
+    // install nothing now, so the system does not lose it.
     let wanted = crate::ext::enabled_optional();
-    let extensions: Vec<String> = wanted
-        .iter()
-        .filter(|name| names.contains(&crate::ext::update_file(&new, name)))
-        .cloned()
-        .collect();
-    for name in wanted.iter().filter(|n| !extensions.contains(n)) {
-        println!(
-            "The extension {name} is not published for XeeonOS {new}: \
-             it will be off on that version."
-        );
+    let ext_dir = cache.join("extensions");
+    let mut ext_files = Vec::new();
+    if !wanted.is_empty() {
+        let ext_source = if from_given {
+            source.clone()
+        } else {
+            Source::parse(&crate::ext::default_source(&new))
+        };
+        fs::create_dir_all(&ext_dir)?;
+        let published = fetch_manifest(&ext_source, &ext_dir, &keyrings)
+            .and_then(|()| manifest_files(&fs::read_to_string(ext_dir.join("SHA256SUMS"))?))
+            .unwrap_or_default();
+        let mut missing = Vec::new();
+        for name in &wanted {
+            match crate::ext::files_of(name, &new, &published) {
+                Some(files) => ext_files.extend(files),
+                None => missing.push(name.as_str()),
+            }
+        }
+        if !missing.is_empty() {
+            println!(
+                "XeeonOS {new} is out, but the extension(s) {} turned on here are not \
+                 published for it yet (they are built right after every version): \
+                 nothing installed. Try again later, or turn them off \
+                 (sudo xctl ext disable <name>) to update without them.",
+                missing.join(", ")
+            );
+            return Ok(());
+        }
+        fetch_files(&ext_source, &ext_dir, &ext_files)?;
+        check_hashes(&ext_dir)?;
     }
+
+    // Only now the large files of the system (not the extensions published
+    // with it, nor the package list for building them).
     let names: Vec<String> = names
         .into_iter()
         .filter(|file| {
-            crate::ext::extension_of(file).is_none_or(|name| extensions.iter().any(|e| e == name))
+            crate::ext::extension_of(file).is_none()
+                && !file.ends_with(".pkgdb.tar.zst")
+                && !file.ends_with(".build.txt")
         })
         .collect();
     fetch_files(&source, cache, &names)?;
@@ -199,8 +224,8 @@ pub fn run(args: &[String]) -> Result<()> {
     println!("Installing XeeonOS {new} (running: {current})...");
     // The files were verified above against the signed manifest.
     run_program(config::SYSUPDATE, &["update", &new])?;
-    for name in &extensions {
-        crate::ext::store(cache, &new, name)?;
+    for name in &wanted {
+        crate::ext::store(&ext_dir, &new, name)?;
         println!("Extension {name}: installed for XeeonOS {new}.");
     }
     // Downloaded extensions of versions that are gone from the boot menu.

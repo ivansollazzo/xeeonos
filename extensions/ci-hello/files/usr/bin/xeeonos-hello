@@ -1,0 +1,3 @@
+#!/bin/sh
+# The program of the test extension ci-hello.
+echo "Hello from the ci-hello extension"

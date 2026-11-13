@@ -11,21 +11,24 @@
 //!   included  its image is part of the system image itself
 //!             (/usr/lib/xeeonos/extensions/<name>.xext): always there, sealed
 //!             and updated with the system. It can only be turned off and on.
-//!   optional  published next to each update as
-//!             xeeonos_<version>.<name>.xext, covered by the same
-//!             signed manifest. `xctl ext enable` downloads it into
-//!             /var/lib/xeeonos/extensions/<version>/, and `xctl update`
-//!             fetches the new version's copy of every enabled one.
+//!   optional  built for every XeeonOS version by the repository
+//!             xeeonos-extensions and published as
+//!             ghcr.io/ivansollazzo/xeeonos-extensions:<version>
+//!             (xeeonos_<version>.<name>.xext and its manifest <name>.conf,
+//!             with a manifest signed by the update key). `xctl ext enable`
+//!             downloads both into /var/lib/xeeonos/extensions/<version>/,
+//!             and `xctl update` fetches the new version's copy of every
+//!             enabled one (and waits while one is not published yet).
 //!
 //!   from a file  an extension image made by someone else, installed with
 //!             `xctl ext install <file>`: not signed, not checked by XeeonOS
 //!             (a warning says so), kept in /var/lib/xeeonos/extensions-local.
 //!
 //! What every extension is (description, Special, Default, services) is
-//! written in its manifest, /usr/lib/xeeonos/extensions/<name>.conf: a copy
-//! of extensions/<name>/extension.conf in the repository. The system image
-//! holds the manifests of all the extensions of its version, and every
-//! extension image holds its own.
+//! written in its manifest, <name>.conf: a copy of its extension.conf. The
+//! system image holds the manifests of the included ones
+//! (/usr/lib/xeeonos/extensions), a downloaded one keeps its own next to its
+//! image, and every extension image holds its own.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -125,7 +128,14 @@ pub fn known() -> Vec<Extension> {
     for ext in &mut list {
         ext.local = true;
     }
-    for ext in manifests(Path::new(config::EXTENSIONS)) {
+    let mut more = manifests(Path::new(config::EXTENSIONS));
+    // The optional ones downloaded for this version.
+    if let Ok(version) = running_version() {
+        more.extend(manifests(
+            &Path::new(config::EXTENSIONS_STORE).join(version),
+        ));
+    }
+    for ext in more {
         // (An active extension from a file shows its own manifest there too.)
         if !list.iter().any(|l| l.name == ext.name) {
             list.push(ext);
@@ -292,14 +302,19 @@ fn enable(args: &[String]) -> Result<()> {
     }
     let name = name.ok_or_else(|| err("usage: xctl ext enable <name> (see xctl ext list)"))?;
     need_root("ext enable")?;
-    let ext = find(&name)?;
     let version = running_version()?;
-
+    // The copy built for the running version: by default from the
+    // extensions' registry, where every version has its own tag.
+    let source = Source::parse(&from.unwrap_or_else(|| default_source(&version)));
+    let ext = match find(&name) {
+        Ok(ext) => ext,
+        // Not known here yet: an optional extension, known by its source.
+        Err(_) => Extension {
+            name: name.clone(),
+            ..Default::default()
+        },
+    };
     if ext.image(&version).is_none() {
-        // The copy built for the running version: by default from the
-        // registry, where every version is published under its own tag.
-        let source =
-            Source::parse(&from.unwrap_or_else(|| format!("oci://{}:{version}", config::REGISTRY)));
         download(&ext, &version, &source, &keyrings)?;
     }
     set_choice(&name, true)?;
@@ -307,8 +322,28 @@ fn enable(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Download the image of `ext` for `version` from `source`, checking it
-/// against the signed manifest like an update.
+/// Where the optional extensions for `version` are published.
+pub fn default_source(version: &str) -> String {
+    format!("oci://{}:{version}", config::EXT_REGISTRY)
+}
+
+/// The files to download for extension `name` on `version`, among the
+/// `published` ones: its image, and its manifest if published too.
+pub fn files_of(name: &str, version: &str, published: &[String]) -> Option<Vec<String>> {
+    let image = update_file(version, name);
+    if !published.contains(&image) {
+        return None;
+    }
+    let mut files = vec![image];
+    let conf = format!("{name}.conf");
+    if published.contains(&conf) {
+        files.push(conf);
+    }
+    Some(files)
+}
+
+/// Download the image of `ext` for `version` (and its manifest) from
+/// `source`, checking them against the signed manifest like an update.
 fn download(ext: &Extension, version: &str, source: &Source, keyrings: &[PathBuf]) -> Result<()> {
     let cache = Path::new(config::EXTENSIONS_CACHE);
     let _ = fs::remove_dir_all(cache);
@@ -317,19 +352,19 @@ fn download(ext: &Extension, version: &str, source: &Source, keyrings: &[PathBuf
 
     update::fetch_manifest(source, cache, keyrings)?;
     let names = update::manifest_files(&fs::read_to_string(cache.join("SHA256SUMS"))?)?;
-    let file = update_file(version, &ext.name);
-    if !names.contains(&file) {
-        return Err(err(format!(
+    let files = files_of(&ext.name, version, &names).ok_or_else(|| {
+        err(format!(
             "the extension {} is not published for XeeonOS {version}",
             ext.name
-        )));
-    }
-    update::fetch_files(source, cache, std::slice::from_ref(&file))?;
+        ))
+    })?;
+    update::fetch_files(source, cache, &files)?;
     update::check_hashes(cache)?;
     store(cache, version, &ext.name)
 }
 
-/// Put a downloaded, verified extension file into the store.
+/// Put a downloaded, verified extension file (and its manifest, if it came
+/// with it) into the store.
 pub fn store(dir: &Path, version: &str, name: &str) -> Result<()> {
     let ext = Extension {
         name: name.to_string(),
@@ -341,8 +376,24 @@ pub fn store(dir: &Path, version: &str, name: &str) -> Result<()> {
     }
     // Written under another name first: a half-written image is never used.
     let partial = image.with_extension("partial");
-    fs::copy(dir.join(update_file(version, name)), &partial)?;
+    copy_image(&dir.join(update_file(version, name)), &partial)?;
     fs::rename(&partial, &image)?;
+    let conf = dir.join(format!("{name}.conf"));
+    if conf.exists() {
+        fs::copy(&conf, image.with_extension("conf"))?;
+    }
+    Ok(())
+}
+
+/// Copy an extension image. Some are several GB (rocm-sdk): on Btrfs the
+/// copy shares the blocks of the original (reflink), so the download and
+/// its stored copy do not take the space twice.
+fn copy_image(from: &Path, to: &Path) -> Result<()> {
+    let _ = fs::remove_file(to);
+    let (from_s, to_s) = (from.to_string_lossy(), to.to_string_lossy());
+    if run_program("cp", &["--reflink=auto", "--", &from_s, &to_s]).is_err() {
+        fs::copy(from, to)?;
+    }
     Ok(())
 }
 

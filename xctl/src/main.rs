@@ -30,6 +30,10 @@ mod config {
     /// Where updates are published: one OCI artifact per version, tagged with
     /// the exact version and with its channel.
     pub const REGISTRY: &str = "ghcr.io/ivansollazzo/xeeonos";
+    /// Where the optional extensions are published (the repository
+    /// xeeonos-extensions): one OCI artifact per XeeonOS version, tagged
+    /// with that version, signed with the same key.
+    pub const EXT_REGISTRY: &str = "ghcr.io/ivansollazzo/xeeonos-extensions";
     /// Public keys allowed to sign updates (OpenPGP keyring, as `gpg --export`).
     pub const KEYRING: &str = "/usr/lib/xeeonos/update-keyring.gpg";
     /// Download directory; the sysupdate.d transfer files read from here.
@@ -47,7 +51,7 @@ mod config {
     /// System extensions (xctl ext): what this version knows (<name>.conf)
     /// and the images included in the system image (<name>.xext).
     pub const EXTENSIONS: &str = "/usr/lib/xeeonos/extensions";
-    /// Downloaded extensions: <version>/<name>.xext.
+    /// Downloaded extensions: <version>/<name>.xext and <name>.conf.
     pub const EXTENSIONS_STORE: &str = "/var/lib/xeeonos/extensions";
     /// Extensions installed from a file: <name>.xext and <name>.conf.
     pub const EXTENSIONS_LOCAL: &str = "/var/lib/xeeonos/extensions-local";

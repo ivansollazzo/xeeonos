@@ -14,13 +14,15 @@
 #                 system build then copies into the image
 #                 (/usr/lib/xeeonos/extensions). It fits whatever version it
 #                 is inside of.
-#   Default=no    "optional" extension:
-#                 <update dir>/xeeonos_<version>.<name>.xext, published
-#                 with the update (tools/mkupdate.sh adds it to the signed
-#                 manifest). It fits only <version>.
+#   Default=no    "optional" extension: <update dir>/xeeonos_<version>.<name>.xext
+#                 and <update dir>/<name>.conf (tools/mkupdate.sh adds them
+#                 to the signed manifest). It fits only <version>. Here only
+#                 the CI's test extension (ci-hello): the real optional
+#                 extensions are built for every version, the same way, in
+#                 the repository xeeonos-extensions.
 #
-# Every extension's extension.conf is also copied to <bundled dir>/<name>.conf:
-# that is how the system knows which extensions exist.
+# An included extension's extension.conf is also copied to
+# <bundled dir>/<name>.conf: that is how the system knows it.
 #
 # Usage: tools/mkext.sh <pkgdb.tar> <version> <bundled dir> <update dir>
 # Needs: docker, mkfs.erofs (erofs-utils); root for packing (sudo).
@@ -55,8 +57,8 @@ for conf in extensions/*/extension.conf; do
     source "$conf"
     release=$tree/usr/lib/extension-release.d/extension-release.$name
     sudo mkdir -p "$(dirname "$release")"
-    cp "$conf" "$bundled/$name.conf"
     if [[ $Default == yes ]]; then
+        cp "$conf" "$bundled/$name.conf"
         # Inside the system image: no version of its own. Not compressed:
         # the system image around it is.
         printf 'ID=_any\n' | sudo tee "$release" >/dev/null
@@ -66,6 +68,7 @@ for conf in extensions/*/extension.conf; do
     else
         printf 'ID=xeeonos\nSYSEXT_LEVEL=%s\n' "$version" | sudo tee "$release" >/dev/null
         xext=$update/xeeonos_$version.$name.xext
+        cp "$conf" "$update/$name.conf"
         sudo mkfs.erofs --quiet -zlz4hc "$xext" "$tree"
         sudo chown "$(id -u):$(id -g)" "$xext"
         ls -lh "$xext"

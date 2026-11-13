@@ -22,7 +22,7 @@ Changes take effect at the next restart.
 | Kind | Where it comes from | Can be |
 | --- | --- | --- |
 | Included | inside the system image (`/usr/lib/xeeonos/extensions/<name>.xext`): sealed and updated with the system, on from the start, also when installed from the ISO without a network | turned off and on |
-| Optional | published with every version on the registry (`xeeonos_<version>.<name>.xext`), covered by the same signed manifest as the update | downloaded, turned on and off, removed |
+| Optional | built for every version by the repository [xeeonos-extensions](https://github.com/ivansollazzo/xeeonos-extensions) and published as `ghcr.io/ivansollazzo/xeeonos-extensions:<version>` (`xeeonos_<version>.<name>.xext` and its manifest `<name>.conf`, signed with the update key) | downloaded, turned on and off, removed |
 | From a file | `sudo xctl ext install <file.xext>`: anything, not signed and not checked by XeeonOS (a warning says so) | turned on and off, removed |
 
 **Special** extensions take away something the rest of the system relies on
@@ -31,7 +31,10 @@ when they are turned off: XeeonOS shows a warning and asks first.
 Every extension is built for one exact version of XeeonOS, from the same Arch
 snapshot. `sudo xctl update` also downloads the new version's copy of the
 optional extensions that are on, and keeps the old one for going back
-(`xctl rollback`). An extension from a file made for another version is left
+(`xctl rollback`). Every XeeonOS build tells xeeonos-extensions, which builds
+and publishes its extensions by itself soon after; until they are out,
+`sudo xctl update` waits (installs nothing and says why), so an update never
+takes an extension away. An extension from a file made for another version is left
 out at boot (`xctl ext list` still shows it).
 
 Recovery always starts without extensions.
@@ -42,11 +45,13 @@ Recovery always starts without extensions.
 | --- | --- | --- |
 | `flatpak` | included, special | Applications from Flathub, Discover (see [flatpak.md](flatpak.md)) |
 | `printing` | included, special | Printers: CUPS, network printers, Printers page (see [printing.md](printing.md)) |
-| `docker` | optional | The Docker engine, Compose, Buildx; users of the group `docker` use it without sudo |
+| `docker`, `rocm`, `rocm-sdk`, `thinkpad-t14-amd-touchpad` | optional | see [xeeonos-extensions](https://github.com/ivansollazzo/xeeonos-extensions) |
+| `ci-hello` | optional, CI only | the test extension of `tools/ci/extensions.sh` |
 
 ## Making one
 
-One directory per extension in `extensions/<name>/`:
+The included ones are here, the optional ones in xeeonos-extensions, made
+the same way. One directory per extension in `extensions/<name>/`:
 
 - `extension.conf`, the manifest (shell syntax):
   - `Description=`, shown by `xctl ext list`;
@@ -72,6 +77,7 @@ An extension from outside: any `systemd-sysext` image whose
 ## Tests
 
 `tools/ci/extensions.sh`: the included ones are on; turning off a special one
-asks; docker is downloaded with a valid signature, works, and is installed
-again from its file with the warning; an included one cannot be removed.
+asks; ci-hello (unknown to the system before) is downloaded with a valid
+signature and its manifest, works, and is installed again from its file
+with the warning; an included one cannot be removed.
 `flatpak.sh` and `printing.sh` test what the included ones bring.

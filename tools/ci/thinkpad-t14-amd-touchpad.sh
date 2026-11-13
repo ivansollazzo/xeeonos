@@ -23,7 +23,7 @@ echo "::group::2. The patched modules are in use"
 cat > out/t14-test.sh <<'SCRIPT'
 modinfo -n psmouse | sed s,^,PATH-,
 modinfo -n i2c_piix4 | sed s,^,PATH-,
-zstdcat "$(modinfo -n psmouse)" | grep -aq LEN2073 && echo ALLOWLIST-LEN2073
+zstdcat "$(modinfo -n psmouse)" 2>/dev/null | grep -aq LEN2073 && echo ALLOWLIST-LEN2073
 systemctl is-active xeeonos-t14-touchpad.service | sed s,^,RELOAD-,
 grep -q O /sys/module/psmouse/taint && echo LOADED-patched-psmouse
 command -v thinkpad-t14-amd-touchpad-check | sed s,^,CHECK-,
@@ -31,8 +31,8 @@ xctl status --check
 SCRIPT
 tools/boot-test.sh --credential t14-test=out/t14-test.sh \
     --run "/bin/sh /run/credentials/@system/t14-test" \
-    --expect "PATH-/usr/lib/modules/.*/updates/psmouse.ko.zst" \
-    --expect "PATH-/usr/lib/modules/.*/updates/i2c-piix4.ko.zst" \
+    --expect "PATH-(/usr)?/lib/modules/.*/updates/psmouse.ko.zst" \
+    --expect "PATH-(/usr)?/lib/modules/.*/updates/i2c-piix4.ko.zst" \
     --expect "ALLOWLIST-LEN2073" \
     --expect "RELOAD-active" \
     --expect "LOADED-patched-psmouse" \

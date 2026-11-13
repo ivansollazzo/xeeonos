@@ -113,7 +113,12 @@ for conf in /src/extensions/*/extension.conf; do
     # make in /etc (WantedBy=, Alias=), made in /usr instead.
     units=$root/usr/lib/systemd/system
     for unit in $Enable; do
-        [[ -e $units/$unit ]] || { echo "extension $name: no unit $unit" >&2; exit 1; }
+        # A unit of the system itself (e.g. avahi-daemon, which comes with
+        # the desktop): nothing to link here, `xctl ext activate` starts it.
+        if [[ ! -e $units/$unit ]]; then
+            echo "extension $name: $unit is part of the system, started at boot"
+            continue
+        fi
         for target in $(sed -n 's/^WantedBy=//p' "$units/$unit"); do
             mkdir -p "$units/$target.wants"
             ln -sf "../$unit" "$units/$target.wants/$unit"

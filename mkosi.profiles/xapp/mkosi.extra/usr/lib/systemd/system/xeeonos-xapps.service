@@ -1,0 +1,9 @@
+# Menu entries for the applications in /var/lib/xapps (xctl app sync): at
+# boot, and whenever the monitor (xeeonos-xapps.path) sees a change.
+[Unit]
+Description=Menu entries of the .xapp applications
+After=systemd-tmpfiles-setup.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/xctl app sync --settle

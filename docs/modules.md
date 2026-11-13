@@ -24,6 +24,7 @@ snapshot, output, tools tree) stay in the top-level `mkosi.conf`.
 | `xctl` | core | The `xctl` system tool (Rust, source in `xctl/`): status, update, rollback, channel, packages, setup, install-system |
 | `live` | optional | Live ISO: UKI running from RAM, root autologin, installer tools; replaces `system` |
 | `audio` | optional | Sound for every desktop: PipeWire (PulseAudio, ALSA and JACK interfaces) |
+| `xapp` | optional | `.xapp` applications (experimental): `/var/lib/xapps` = `~/Applications`, monitor, `xctl app`, see [xapp.md](xapp.md) |
 | `plasma` | optional | KDE Plasma desktop, minimal: Wayland session, SDDM login screen, network/Bluetooth/screens/power settings (sound settings with `audio`), Konsole, Dolphin, Spectacle, System Monitor, Ark (see [desktop.md](desktop.md)) |
 
 The initrd built into every kernel image is configured in the top-level
@@ -39,7 +40,7 @@ A variant is a set of optional modules on top of the core ones:
 | --- | --- |
 | Core (no desktop), installed system | `mkosi build` |
 | Live ISO | `mkosi --profile=live build` |
-| Desktop: what CI builds and publishes | `tools/mkext.sh` (extensions), then `mkosi --profile=plasma,audio --extra-tree=<extensions>:/usr/lib/xeeonos/extensions build` (see the workflow) |
+| Desktop: what CI builds and publishes | `tools/mkext.sh` (extensions), then `mkosi --profile=plasma,audio,xapp --extra-tree=<extensions>:/usr/lib/xeeonos/extensions build` (see the workflow) |
 
 ## Extensions
 

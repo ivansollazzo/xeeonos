@@ -1,0 +1,12 @@
+# The monitor of /var/lib/xapps: an application copied there, or deleted,
+# appears in (or leaves) the menu by itself (docs/xapp.md).
+[Unit]
+Description=Watch the .xapp applications
+
+[Path]
+PathChanged=/var/lib/xapps
+Unit=xeeonos-xapps.service
+MakeDirectory=yes
+
+[Install]
+WantedBy=multi-user.target

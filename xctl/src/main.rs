@@ -1,9 +1,10 @@
 //! xctl - the XeeonOS system tool.
 //!
 //! Commands: `status`, `update`, `rollback`, `channel`, `packages`, `setup`,
-//! `ext`, `install-system`, `recovery`, `network`, `encryption`, `firewall`, `snapshots`,
+//! `ext`, `app`, `install-system`, `recovery`, `network`, `encryption`, `firewall`, `snapshots`,
 //! `report`. Each command lives in its own module (file) below.
 
+mod app;
 mod boot;
 mod channel;
 mod encryption;
@@ -109,6 +110,13 @@ Commands:
                          Install an extension image from a file (not signed,
                          not verified: asks first).
   ext remove <name>      Turn an optional extension off and delete it.
+  app [list]             List the .xapp applications (experimental, see
+                         docs/xapp.md): directories in ~/Applications
+                         (/var/lib/xapps), in the menu by themselves.
+  app install <path>     Install a Name.xapp directory or archive
+                         (administrators, no sudo needed).
+  app remove <name>      Remove an application.
+  app run <name> [args]  Start an application.
   packages [<name>]      List the packages of this version (and their
                          versions); with <name>, only those containing it.
   setup                  First-boot setup: language, keyboard, time zone,
@@ -182,6 +190,7 @@ fn main() {
         "setup" => setup::run_setup(rest),
         "channel" => channel::run(rest),
         "ext" => ext::run(rest),
+        "app" => app::run(rest),
         "network" => network::run_network(rest),
         "firewall" => firewall::run_firewall(rest),
         "snapshots" => snapshots::run_snapshots(rest),

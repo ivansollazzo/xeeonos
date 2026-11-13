@@ -25,10 +25,18 @@ if ! grep -q "^$test " "$table"; then
     exit 0
 fi
 
-starts() { # <file> <prefix>...
+starts() { # <file> <path>... (a path ending in / is a directory: anything
+    # under it; any other path is that file only, so mkosi.conf does not
+    # match mkosi.conf.d/...)
     local file=$1 p
     shift
-    for p in "$@"; do [[ $file == "$p"* ]] && return 0; done
+    for p in "$@"; do
+        if [[ $p == */ ]]; then
+            [[ $file == "$p"* ]] && return 0
+        else
+            [[ $file == "$p" ]] && return 0
+        fi
+    done
     return 1
 }
 

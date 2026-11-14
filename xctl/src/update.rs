@@ -599,7 +599,7 @@ pub(crate) fn newest_version(dir: &Path) -> Result<Option<String>> {
     Ok(versions_in(&names).into_iter().max_by(|a, b| compare(a, b)))
 }
 
-fn versions_in(names: &[String]) -> Vec<String> {
+pub(crate) fn versions_in(names: &[String]) -> Vec<String> {
     names
         .iter()
         .filter_map(|n| n.strip_prefix("xeeonos_")?.strip_suffix(".efi"))

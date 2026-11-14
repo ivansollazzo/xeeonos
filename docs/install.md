@@ -1,8 +1,15 @@
 # Installing
 
-The live ISO carries the system to install (`xeeonos/` on the ISO: the same
-files as an update, see [updates.md](updates.md)), so installing needs no
-network.
+There are two ISOs (see [updates.md](updates.md)):
+
+- the **full ISO** carries the system to install (`xeeonos/` on the ISO: the
+  same files as an update), so installing needs no network;
+- the **network ISO** (the one on GitHub Releases) carries only the live
+  system: the installer downloads the system from the channel the ISO was
+  built for (testing or stable), the same signed files as an update, and
+  checks their signature. Without a connection it offers the network
+  settings (Wi-Fi). The download (about 2 GB) is kept in memory until the
+  installation is done.
 
 ```sh
 xctl install-system                    # dialog windows: how, which disk, confirm
@@ -77,7 +84,9 @@ confirmation, for automated tests.
 
 CI (`tools/ci/iso-install.sh`) boots the ISO with a blank 24 GiB disk, runs
 `xctl install-system --disk /dev/vda --yes`, then boots that disk and checks
-that the system is sealed. `tools/ci/iso-alongside.sh` does the same on a disk with "another
+that the system is sealed; then it does the same with the network ISO, which
+downloads the system from a local web directory (`--from http://...`,
+signed with a throwaway key). `tools/ci/iso-alongside.sh` does the same on a disk with "another
 system" (a 100 MiB EFI System Partition and a data partition with a marker)
 using `--free-space`: the installed system must start from its own boot
 partition, and the other partition must be unchanged.

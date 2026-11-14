@@ -1,7 +1,7 @@
 name: Nuovo snapshot
 
 # On request (Actions > Nuovo snapshot > Run workflow), a pull request that
-# moves a branch (testing, or experimental) to another snapshot of the
+# moves the testing branch to another snapshot of the
 # Arch Linux Archive (Snapshot= in mkosi.conf): new kernel, libraries and
 # security fixes, while every build stays reproducible. The pull request is
 # tested like any other and merged by hand.
@@ -26,7 +26,7 @@ on:
       branch:
         description: Branch to move (new snapshots go to testing)
         type: choice
-        options: [testing, experimental]
+        options: [testing]
         default: testing
       date:
         description: Snapshot date YYYY/MM/DD (empty = the newest complete one)

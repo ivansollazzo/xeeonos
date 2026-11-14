@@ -15,9 +15,8 @@ The channel is the branch name (see [docs/updates.md](docs/updates.md)):
 
 | Branch | Channel | Version example |
 | --- | --- | --- |
-| `experimental` | Free experimentation, every merge published | `26.11-experimental.42` |
-| `testing` (later) | What comes next: new features, new Arch snapshots; every merge published | `26.12-testing.7` |
-| `stable` (later) | Fixed versions, published by hand ("Pubblica versione") | `26.12.1`, `26.12.2` |
+| `testing` (default branch) | What comes next: new features, new Arch snapshots; every merge published | `26.12-testing.7` |
+| `stable` | Fixed versions, published by hand ("Pubblica versione") | `26.12.1`, `26.12.2` |
 
 Changes enter a branch only through a pull request with green CI; work branches
 are deleted after merge. CI builds everything once, then runs one test job per

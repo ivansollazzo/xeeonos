@@ -6,7 +6,7 @@
 # /etc and /var).
 [Unit]
 Description=XeeonOS system extensions
-Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/extensions.md
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/testing/docs/extensions.md
 DefaultDependencies=no
 ConditionDirectoryNotEmpty=/usr/lib/xeeonos/extensions
 # Recovery stays the plain system: an extension can never get in its way.

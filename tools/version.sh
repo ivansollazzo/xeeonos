@@ -4,7 +4,6 @@
 # Versions follow the month: YY.MM (26.11, then 27.1 in January). The branch
 # is the channel and the registry tag:
 #
-#   experimental -> 26.11-experimental.42   (every merge publishes one)
 #   testing      -> 26.11-testing.57        (every merge publishes one)
 #   stable       -> 26.11.2                 only from the "Pubblica versione"
 #                   workflow (release.yml), which sets XEEONOS_VERSION; a
@@ -16,7 +15,7 @@
 # ordered. XEEONOS_MONTH (YY.MM) overrides the month, for tests.
 #
 # With --channel, print the channel instead (the registry tag that
-# `xctl update` follows): experimental, testing or stable, or nothing for
+# `xctl update` follows): testing or stable, or nothing for
 # builds that are not published.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -38,14 +37,14 @@ if [[ -n $release ]]; then
 fi
 
 case $branch in
-    experimental | testing) stage=$branch ;;
+    testing) stage=$branch ;;
     stable) stage=${release:+release} ; stage=${stage:-rc} ;;
     *) stage=dev ;;
 esac
 
 if [[ ${1:-} == --channel ]]; then
     case $stage in
-        experimental | testing) echo "$stage" ;;
+        testing) echo "$stage" ;;
         release) echo stable ;;
     esac
     exit 0

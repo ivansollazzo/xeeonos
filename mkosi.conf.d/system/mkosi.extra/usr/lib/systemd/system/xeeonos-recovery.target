@@ -3,7 +3,7 @@
 # (recovery.profile). See docs/recovery.md.
 [Unit]
 Description=XeeonOS Recovery
-Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/recovery.md
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/testing/docs/recovery.md
 Requires=basic.target
 After=basic.target
 Wants=xeeonos-recovery.service NetworkManager.service

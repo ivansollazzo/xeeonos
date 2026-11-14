@@ -6,7 +6,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    target-branch: experimental
+    target-branch: testing
     # All the updates of a week in one pull request (one CI run).
     groups:
       github-actions:

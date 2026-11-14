@@ -64,7 +64,7 @@ Attach it to the [bug report](https://github.com/ivansollazzo/xeeonos/issues).
 
 The snapshot is chosen by hand, nothing moves it by itself: Actions → **Nuovo
 snapshot** → Run workflow (`.github/workflows/snapshot.yml`), with the
-branch (`testing`, where new snapshots go, or `experimental`) and a date
+branch (`testing`, where new snapshots go) and a date
 (YYYY/MM/DD, or empty for the newest complete one). It opens (or updates)
 one pull request that moves `Snapshot=` in `mkosi.conf`. Its description
 lists the Arch news published since the current snapshot and the packages

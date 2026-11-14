@@ -98,7 +98,7 @@ Commands:
   channel                Show the update channel.
   channel list           List the channels (needs the network): stable
                          (fixed versions YY.MM.S), testing (what comes
-                         next), experimental (free development).
+                         next).
   channel set <name>     Switch to the channel <name> (only one that exists).
   channel reset          Go back to the channel this version was built for.
   extensions [list]      List the system extensions (software added on top

@@ -2,7 +2,7 @@
 //!
 //! The channels are the tags on the registry, and the branches they are
 //! built from: `stable` (fixed versions YY.MM.S, published by hand),
-//! `testing` (what comes next) and `experimental` (free development).
+//! and `testing` (what comes next).
 //!
 //! By default a system follows the channel its version was built for. The
 //! administrator can choose another one; the choice is stored in
@@ -51,8 +51,7 @@ fn published() -> Result<Vec<String>> {
 fn describe(channel: &str) -> &'static str {
     match channel {
         "stable" => "fixed versions (YY.MM.S)",
-        "testing" => "what comes next: new features and Arch snapshots",
-        _ => "free development, may break",
+        _ => "what comes next: new features and Arch snapshots",
     }
 }
 

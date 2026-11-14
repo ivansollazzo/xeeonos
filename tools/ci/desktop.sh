@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # GNOME (mkosi.profiles/gnome): after the first-boot setup, the login screen
-# (GDM: GNOME Shell of the user gdm, Wayland) starts, with the keyboard chosen
+# (GDM: GNOME Shell of its own greeter user, Wayland) starts, with the keyboard chosen
 # at setup; then the user's GNOME session starts (automatic login, set by the
 # test) with that keyboard as its input source and with sound (PipeWire). No
 # GPU in the VM: GNOME Shell draws with Mesa's software renderer.
@@ -12,6 +12,17 @@ cat > out/desktop-test.sh <<'SCRIPT'
 wait_for() { # <user> <process>: up to 3 minutes
     for _ in $(seq 180); do
         pgrep -u "$1" -x "$2" >/dev/null && return
+        sleep 1
+    done
+}
+# The login screen runs as a user of its own, made by GDM when it starts
+# (gdm-greeter, gdm-greeter-2, ...): its name is known only then.
+greeter() {
+    ps -eo user:32=,comm= | awk '$1 ~ /^gdm-greeter/ && $2 == "gnome-shell" { print $1; exit }'
+}
+wait_for_greeter() { # up to 3 minutes
+    for _ in $(seq 180); do
+        test -n "$(greeter)" && return
         sleep 1
     done
 }
@@ -28,9 +39,13 @@ diag() { # <user>: why their GNOME Shell is not there, in the log
 # The test command replaces the normal boot target (systemd.run=): start the
 # graphical one, as a normal boot does.
 systemctl start --no-block graphical.target
-wait_for gdm gnome-shell
-pgrep -u gdm -l -x gnome-shell | sed s,^,GREETER-,
-pgrep -u gdm -x gnome-shell >/dev/null || diag gdm
+wait_for_greeter
+user=$(greeter)
+if test -n "$user"; then
+    pgrep -u "$user" -l -x gnome-shell | sed s,^,GREETER-,
+else
+    diag gdm-greeter
+fi
 systemctl is-active display-manager.service | sed s,^,GDM-,
 localectl status | grep 'X11 Layout' | sed s,^,KB-,
 # Automatic login (a copy of the default file instead of the link).

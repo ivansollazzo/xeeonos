@@ -46,6 +46,17 @@ uid=$(id -u test)
 runuser -u test -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
     gsettings get org.gnome.desktop.input-sources sources | sed s,^,SOURCES-,
 if test -S "/run/user/$uid/pipewire-0"; then echo SOUND-ready; fi
+# The GNOME services and helpers of the module are there.
+missing=""
+for f in /usr/bin/gnome-disks /usr/lib/fprintd /usr/bin/boltctl \
+    /usr/bin/monitor-sensor /usr/lib/gvfsd-mtp /usr/lib/gvfsd-gphoto2 \
+    /usr/lib/gvfsd-afc /usr/lib/gvfsd-smb /usr/lib/gvfsd-nfs \
+    /usr/lib/bluetooth/obexd /usr/lib/NetworkManager/VPN/nm-openvpn-service.name \
+    /usr/bin/xdg-open /usr/bin/glxinfo /usr/bin/vulkaninfo; do
+    test -e "$f" || missing="$missing $f"
+done
+echo "GNOME-missing:${missing:- none}"
+systemctl is-active switcheroo-control.service | sed s,^,SWITCHEROO-,
 # The system's own partitions are not shown as disks (Files, through UDisks).
 for d in /dev/mapper/root /dev/mapper/usr /dev/disk/by-partlabel/xeeonos-root; do
     udevadm info -q property "$d" | grep -q '^UDISKS_IGNORE=1' && echo "HIDDEN-$(basename "$d")"
@@ -61,6 +72,8 @@ TIMEOUT=900 tools/boot-test.sh \
     --expect "DESKTOP-[0-9]+ gnome-shell" \
     --expect "SOURCES-.*'xkb', 'it'" \
     --expect "SOUND-ready" \
+    --expect "GNOME-missing: none" \
+    --expect "SWITCHEROO-active" \
     --expect "HIDDEN-root" \
     --expect "HIDDEN-usr" \
     --expect "HIDDEN-xeeonos-root" \

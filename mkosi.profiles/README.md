@@ -5,5 +5,5 @@ Each directory here is an optional XeeonOS module (an mkosi profile), enabled wi
 and, when needed, `mkosi.extra/` (files), `mkosi.postinst` (setup script) and so on.
 
 Modules: `live` (the live ISO), `gnome` (GNOME desktop), `audio`
-(sound: PipeWire), Flatpak and printing are system extensions (`extensions/`, see
+(sound: PipeWire), Flatpak, printing and scanners are system extensions (`extensions/`, see
 docs/extensions.md).

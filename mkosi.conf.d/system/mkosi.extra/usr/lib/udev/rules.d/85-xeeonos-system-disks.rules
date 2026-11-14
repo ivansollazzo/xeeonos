@@ -8,5 +8,8 @@ ENV{ID_PART_ENTRY_NAME}=="xeeonos_*|_empty|xeeonos-root", ENV{UDISKS_IGNORE}="1"
 # The same once opened: /usr (dm-verity) and the data filesystem (LUKS).
 KERNEL=="dm-*", ENV{DM_NAME}=="usr|root", ENV{UDISKS_IGNORE}="1"
 ENV{ID_FS_LABEL}=="xeeonos-root", ENV{UDISKS_IGNORE}="1"
+# The system extensions (xctl extensions): systemd-sysext lays their images
+# over /usr through loop devices. (ATTRS: also a partition of such a loop.)
+KERNEL=="loop*", ATTRS{loop/backing_file}=="/usr/lib/xeeonos/extensions/*|/var/lib/xeeonos/extensions/*|/run/extensions/*|*.xext", ENV{UDISKS_IGNORE}="1"
 
 LABEL="xeeonos_system_disks_end"

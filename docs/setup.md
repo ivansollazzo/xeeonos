@@ -10,6 +10,9 @@ white dialog windows ("Back" goes to the previous step):
 - the **network**: a wired or Wi-Fi connection, automatic (DHCP) or with a
   manual address, gateway and DNS (`xctl network`, see below); "Done" skips
   it;
+- the **default applications**, only with a desktop that has a list (GNOME)
+  and the extension `flatpak`: install them from Flathub or not
+  ([flatpak.md](flatpak.md));
 - the **computer name**;
 - the **first user**: full name, user name, password, and whether it is an
   administrator (member of `wheel`, can use `sudo`);
@@ -63,10 +66,12 @@ password=...
 admin=yes
 ```
 
-`keyboard`, `timezone`, `hostname`, `fullname` and `admin` are optional.
+`keyboard`, `timezone`, `hostname`, `fullname`, `admin` and `apps`
+(`yes`, the default, or `no`: the default applications) are optional.
 `encrypt=yes` turns the disk password on (with `disk_password=`, or the
 account password); the recovery key is printed on the console. CI
-uses this (`tools/boot-test.sh --setup <file>`).
+uses this (`tools/boot-test.sh --setup <file>`, which adds `apps=no`
+unless the test says otherwise: the CI never downloads them).
 
 ## What is not in the image
 

@@ -1,0 +1,31 @@
+#!/bin/bash
+# The default applications of the desktop, from Flathub: the lists in
+# preinstall.d (the desktop module ships one, e.g. gnome.preinstall),
+# installed with `flatpak preinstall` as soon as there is a network
+# connection (docs/flatpak.md). Started by xeeonos-flatpak-preinstall.timer
+# every 15 minutes; it does nothing when:
+#   - the first-boot setup has not run yet, or it was answered "no"
+#     (/var/lib/xeeonos/flatpak-preinstall-off);
+#   - the lists did not change since they were installed (…-done holds
+#     their checksum: a new list in an update installs what it adds);
+#   - there is no network (tried again later).
+# Flatpak itself remembers the applications the user removed and never
+# installs them again.
+set -u
+state=/var/lib/xeeonos
+lists=(/usr/share/flatpak/preinstall.d/*.preinstall /etc/flatpak/preinstall.d/*.preinstall)
+[[ -e $state/setup-done ]] || exit 0
+[[ -e $state/flatpak-preinstall-off ]] && exit 0
+existing=()
+for f in "${lists[@]}"; do [[ -e $f ]] && existing+=("$f"); done
+(( ${#existing[@]} )) || exit 0
+sum=$(cat "${existing[@]}" | sha256sum | cut -d' ' -f1)
+[[ $(cat "$state/flatpak-preinstall-done" 2>/dev/null) == "$sum" ]] && exit 0
+rm -f "$state/flatpak-preinstall-done"
+if ! nm-online --quiet --timeout=30; then
+    echo "No network: the default applications are installed later."
+    exit 0
+fi
+flatpak preinstall --system --assumeyes --noninteractive || exit 1
+echo "$sum" > "$state/flatpak-preinstall-done"
+echo "The default applications are installed."

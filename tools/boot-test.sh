@@ -108,6 +108,9 @@ run_media() {
     bless+=" || exit 0; systemctl start systemd-bless-boot.service"
     cmdline="console=ttyS0,115200"
     if [[ -n $setup ]]; then
+        # The CI never downloads the default applications from Flathub
+        # (several GB): "no" unless the test answers itself.
+        grep -q '^apps=' "$setup" || echo apps=no >> "$setup"
         credentials+=("xeeonos.setup=$setup")
     else
         cmdline+=" systemd.firstboot=no"

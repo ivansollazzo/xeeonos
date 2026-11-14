@@ -73,6 +73,9 @@ pub fn run(check: bool) -> Result<()> {
     if let Some(extensions) = crate::ext::summary() {
         println!("Extensions:  {extensions} (xctl extensions)");
     }
+    if let Some(apps) = crate::apps::summary() {
+        println!("Apps:        {apps} (default applications, Flathub)");
+    }
     println!("Data (/):    {root_fs}");
     // Without root rights the LUKS header cannot be read: say only whether
     // the data partition is encrypted.

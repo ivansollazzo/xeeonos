@@ -28,7 +28,7 @@ snapshots tools/ci/snapshots.sh xctl/src/snapshots.rs xctl/src/update.rs
 hibernate tools/ci/hibernate.sh
 desktop tools/ci/desktop.sh
 tools tools/ci/tools.sh mkosi.conf.d/tools/ xctl/src/ssh.rs xctl/src/firewall.rs
-flatpak tools/ci/flatpak.sh extensions/flatpak/ tools/mkext.sh tools/mkext-install.sh xctl/src/ext.rs
+flatpak tools/ci/flatpak.sh extensions/flatpak/ tools/mkext.sh tools/mkext-install.sh xctl/src/ext.rs xctl/src/apps.rs
 printing tools/ci/printing.sh extensions/printing/ tools/mkext.sh tools/mkext-install.sh xctl/src/ext.rs
 scanner tools/ci/scanner.sh extensions/scanner/ tools/mkext.sh tools/mkext-install.sh xctl/src/ext.rs
 extensions tools/ci/extensions.sh extensions/ tools/mkext.sh tools/mkext-install.sh

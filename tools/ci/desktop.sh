@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# KDE Plasma (mkosi.profiles/plasma): after the first-boot setup, the login
-# screen (SDDM on KWin, Wayland) starts, with the keyboard chosen at setup;
-# then the user's Plasma session starts (automatic login, set by the test)
-# with sound (PipeWire). No GPU in the VM: KWin draws with Mesa's software
-# renderer.
+# GNOME (mkosi.profiles/gnome): after the first-boot setup, the login screen
+# (GDM: GNOME Shell of the user gdm, Wayland) starts, with the keyboard chosen
+# at setup; then the user's GNOME session starts (automatic login, set by the
+# test) with that keyboard as its input source and with sound (PipeWire). No
+# GPU in the VM: GNOME Shell draws with Mesa's software renderer.
 source "$(dirname "$0")/common.sh"
 fresh_disk
 printf '%s\n' language=it_IT.UTF-8 hostname=xeeonos-ci user=test \
@@ -15,34 +15,38 @@ wait_for() { # <user> <process>: up to 3 minutes
         sleep 1
     done
 }
+diag() { # <user>: why their GNOME Shell is not there, in the log
+    {
+        ps -eo user:12,pid,comm | grep -E 'gdm|gnome|USER'
+        loginctl list-sessions --no-pager
+        getent passwd "$1"
+        systemctl status --no-pager -n 0 "user@$(id -u "$1").service" gdm.service
+        journalctl -b --no-pager -n 150 -u gdm.service -u "user@$(id -u "$1").service" \
+            -t gdm -t gdm-session-worker -t gnome-shell -t gnome-session-binary
+    } 2>&1 | cut -c1-300 | sed s,^,DIAG-,
+}
 # The test command replaces the normal boot target (systemd.run=): start the
 # graphical one, as a normal boot does.
 systemctl start --no-block graphical.target
-wait_for sddm kwin_wayland
-pgrep -u sddm -l -x kwin_wayland | sed s,^,GREETER-,
-# If the login screen is not there, say why in the log.
-if ! pgrep -u sddm -x kwin_wayland >/dev/null; then
-    {
-        ps -eo user:12,pid,comm | grep -E 'sddm|kwin|USER'
-        loginctl list-sessions --no-pager
-        getent passwd sddm
-        ls -ld /var/lib/sddm /run/user/*
-        systemctl status --no-pager -n 0 "user@$(id -u sddm).service" sddm.service
-        journalctl -b --no-pager -n 120 -u sddm.service -u "user@$(id -u sddm).service" \
-            -t sddm -t sddm-helper -t sddm-greeter-qt6 -t kwin_wayland -t kwin_wayland_wrapper
-    } 2>&1 | cut -c1-300 | sed s,^,DIAG-,
-fi
-systemctl is-active display-manager.service | sed s,^,SDDM-,
+wait_for gdm gnome-shell
+pgrep -u gdm -l -x gnome-shell | sed s,^,GREETER-,
+pgrep -u gdm -x gnome-shell >/dev/null || diag gdm
+systemctl is-active display-manager.service | sed s,^,GDM-,
 localectl status | grep 'X11 Layout' | sed s,^,KB-,
-sed s,^,KXKB-, /home/test/.config/kxkbrc
-mkdir -p /etc/sddm.conf.d
-printf '[Autologin]\nUser=test\nSession=plasma\n' > /etc/sddm.conf.d/autologin.conf
+# Automatic login (a copy of the default file instead of the link).
+rm /etc/gdm
+mkdir /etc/gdm
+printf '[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=test\n' > /etc/gdm/custom.conf
 systemctl restart display-manager.service
-wait_for test plasmashell
-pgrep -u test -l -x plasmashell | sed s,^,DESKTOP-,
-sleep 10
-if test -S "/run/user/$(id -u test)/pipewire-0"; then echo SOUND-ready; fi
-# The system's own partitions are not shown as disks (Dolphin, through UDisks).
+wait_for test gnome-shell
+pgrep -u test -l -x gnome-shell | sed s,^,DESKTOP-,
+pgrep -u test -x gnome-shell >/dev/null || diag test
+sleep 15
+uid=$(id -u test)
+runuser -u test -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+    gsettings get org.gnome.desktop.input-sources sources | sed s,^,SOURCES-,
+if test -S "/run/user/$uid/pipewire-0"; then echo SOUND-ready; fi
+# The system's own partitions are not shown as disks (Files, through UDisks).
 for d in /dev/mapper/root /dev/mapper/usr /dev/disk/by-partlabel/xeeonos-root; do
     udevadm info -q property "$d" | grep -q '^UDISKS_IGNORE=1' && echo "HIDDEN-$(basename "$d")"
 done
@@ -51,11 +55,11 @@ TIMEOUT=900 tools/boot-test.sh \
     --setup out/setup.txt \
     --credential desktop-test=out/desktop-test.sh \
     --run "/bin/sh /run/credentials/@system/desktop-test" \
-    --expect "GREETER-[0-9]+ kwin_wayland" \
-    --expect "SDDM-active" \
+    --expect "GREETER-[0-9]+ gnome-shell" \
+    --expect "GDM-active" \
     --expect "KB-.*X11 Layout: it" \
-    --expect "KXKB-LayoutList=it" \
-    --expect "DESKTOP-[0-9]+ plasmashell" \
+    --expect "DESKTOP-[0-9]+ gnome-shell" \
+    --expect "SOURCES-.*'xkb', 'it'" \
     --expect "SOUND-ready" \
     --expect "HIDDEN-root" \
     --expect "HIDDEN-usr" \

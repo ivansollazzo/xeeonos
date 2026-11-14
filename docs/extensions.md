@@ -58,7 +58,7 @@ Recovery always starts without extensions.
 
 | Name | Kind | What |
 | --- | --- | --- |
-| `flatpak` | included, special | Applications from Flathub, Discover (see [flatpak.md](flatpak.md)) |
+| `flatpak` | included, special | Applications from Flathub, GNOME Software (see [flatpak.md](flatpak.md)) |
 | `printing` | included, special | Printers: CUPS, network printers, Printers page (see [printing.md](printing.md)) |
 | `podman`, `distrobox`, `docker`, `rocm`, `rocm-sdk`, `thinkpad-t14-amd-touchpad` | optional | see [xeeonos-extensions](https://github.com/ivansollazzo/xeeonos-extensions) |
 | `ci-hello` | optional, CI only | the test extension of `tools/ci/extensions.sh` |

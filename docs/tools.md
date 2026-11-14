@@ -30,7 +30,7 @@ chmod +x Application.AppImage
 ```
 
 They need FUSE 2 (`libfuse.so.2`, `fusermount`), which is part of this
-module. For everything else, prefer Flatpak (Discover).
+module. For everything else, prefer Flatpak (GNOME Software).
 
 ## Containers
 

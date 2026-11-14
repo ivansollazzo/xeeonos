@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Extension flatpak (extensions/flatpak, included): Flatpak with Flathub set up for the
-# whole system, visible to the user of the setup, and Discover with its
-# Flatpak support when the desktop is Plasma.
+# whole system, visible to the user of the setup, and GNOME Software with its
+# Flatpak support.
 source "$(dirname "$0")/common.sh"
 fresh_disk
 printf '%s\n' language=en_US.UTF-8 hostname=xeeonos-ci user=test \
@@ -12,8 +12,8 @@ flatpak remotes --system --columns=name,url | sed s,^,SYSTEM-,
 su - test -c 'flatpak remotes --columns=name,options' | sed s,^,USER-,
 # Installed applications appear in the menus through these directories.
 su - test -c 'echo $XDG_DATA_DIRS' | sed s,^,DATADIRS-,
-test -x /usr/bin/plasma-discover && echo DISCOVER-present
-find /usr/lib/qt6/plugins/discover -name '*flatpak*' | sed s,^,BACKEND-,
+test -x /usr/bin/gnome-software && echo SOFTWARE-present
+find /usr/lib/gnome-software -name '*flatpak*' | sed s,^,BACKEND-,
 xctl status --check
 SCRIPT
 tools/boot-test.sh \
@@ -24,7 +24,7 @@ tools/boot-test.sh \
     --expect "SYSTEM-flathub.*https://dl.flathub.org/repo/" \
     --expect "USER-flathub.*system" \
     --expect "DATADIRS-.*/var/lib/flatpak/exports/share" \
-    --expect "DISCOVER-present" \
+    --expect "SOFTWARE-present" \
     --expect "BACKEND-.*flatpak" \
     --expect "check: sealed system OK" \
     out/disk.raw out/serial-flatpak.log

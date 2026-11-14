@@ -14,7 +14,7 @@ giorno, versioni e canali, cosa resta da fare.
   chiave. Mancano i passi sul PC vero (registrare la chiave nel firmware,
   `sudo xctl encryption tpm on`) e il backup della chiave di firma degli
   aggiornamenti.
-- **Desktop** (fase 3): Plasma su Wayland con SDDM, audio PipeWire,
+- **Desktop** (fase 3): GNOME su Wayland con GDM, audio PipeWire,
   Bluetooth; modulo `tools` (SSH, server spento, `xctl ssh-server on|off`; FUSE 2 per le AppImage); estensioni di
   sistema (`xctl extensions`: flatpak e printing incluse; quelle opzionali, podman,
   distrobox, docker, rocm, rocm-sdk e touchpad T14, nel repository
@@ -127,7 +127,7 @@ In ordine di importanza:
 3. `.xapp`: da ripensare da zero (repository `xeeonos-applications`).
 4. Flatpak preinstallati (al primo avvio o nella ISO): da decidere.
 5. Installatore grafico in Qt (oggi `xctl install-system` testuale).
-6. Logo e grafica (schermata di avvio, sfondo, SDDM).
+6. Logo e grafica (schermata di avvio, sfondo, schermata di login).
 7. Estensioni nuove: nel repository `xeeonos-extensions` (le incluse,
    flatpak e printing, restano in `extensions/` qui).
 

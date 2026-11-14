@@ -7,9 +7,9 @@ asks first).
 - **CUPS** does the printing. It starts by itself at the first use of a
   printer. Modern printers (USB and network) work without drivers
   (IPP Everywhere, AirPrint).
-- With the Plasma desktop, printers are added and managed in
-  **System Settings, Printers**; the print queue is in the system tray.
-  Adding a printer asks for the password of an administrator.
+- Printers are added and managed in **Settings, Printers** (through
+  cups-pk-helper), with each printer's queue there too. Adding a printer asks
+  for the password of an administrator.
 - From a terminal: `lpstat -p` (printers), `lp <file>` (print),
   and the CUPS page at <http://localhost:631>.
 
@@ -31,5 +31,5 @@ Without it, a network printer can still be added by its address
 ## Tests
 
 `tools/ci/printing.sh`: CUPS starts on demand and a printer can be added,
-Avahi runs and `.local` names are resolved through it, Plasma has its
-Printers page.
+Avahi runs and `.local` names are resolved through it, and the Printers page
+of Settings can manage printers (cups-pk-helper).

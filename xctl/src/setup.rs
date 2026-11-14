@@ -504,7 +504,7 @@ fn apply(a: &Answers) -> Result<()> {
         return Err(err("setting the password failed"));
     }
     // The same keyboard layout for the graphical desktop, if there is one.
-    apply_graphical_keyboard(&a.keyboard, &a.user)?;
+    apply_graphical_keyboard(&a.keyboard)?;
 
     println!(
         "XeeonOS setup: created user {}{}",
@@ -517,11 +517,11 @@ fn apply(a: &Answers) -> Result<()> {
 /// The keyboard of the graphical login screen and desktop: the X11 layout
 /// that matches the console keymap, from systemd's own table (what
 /// `localectl set-keymap` does, without needing systemd-localed running).
-/// Written to /etc/X11/xorg.conf.d/00-keyboard.conf (read by systemd-localed,
-/// so the login screen uses it) and, with KDE Plasma, to the new user's
-/// ~/.config/kxkbrc. (/etc/xdg is part of the read-only /usr.)
-fn apply_graphical_keyboard(keymap: &str, user: &str) -> Result<()> {
-    if !Path::new(PLASMA).exists() {
+/// Written to /etc/X11/xorg.conf.d/00-keyboard.conf, read by
+/// systemd-localed: the login screen uses it, and GNOME makes it the first
+/// user's input source at their first login.
+fn apply_graphical_keyboard(keymap: &str) -> Result<()> {
+    if !Path::new(DESKTOP).exists() {
         return Ok(());
     }
     let table = fs::read_to_string(KBD_MODEL_MAP).unwrap_or_default();
@@ -539,21 +539,11 @@ fn apply_graphical_keyboard(keymap: &str, user: &str) -> Result<()> {
     }
     conf.push_str("EndSection\n");
     fs::write("/etc/X11/xorg.conf.d/00-keyboard.conf", conf)?;
-
-    let config = Path::new("/home").join(user).join(".config");
-    fs::create_dir_all(&config)?;
-    fs::write(
-        config.join("kxkbrc"),
-        format!("[Layout]\nUse=true\nLayoutList={layout}\nVariantList={variant}\n"),
-    )?;
-    // "user:" = the user and their login group.
-    let owner = format!("{user}:");
-    run("chown", &["-R", &owner, &config.to_string_lossy()])?;
     Ok(())
 }
 
-/// Present when the image has KDE Plasma (mkosi.profiles/plasma).
-const PLASMA: &str = "/usr/bin/plasmashell";
+/// Present when the image has a desktop (Wayland sessions to log in to).
+const DESKTOP: &str = "/usr/share/wayland-sessions";
 /// systemd's table of console keymaps and their X11 equivalents.
 const KBD_MODEL_MAP: &str = "/usr/share/systemd/kbd-model-map";
 

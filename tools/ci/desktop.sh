@@ -61,13 +61,15 @@ uid=$(id -u test)
 runuser -u test -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
     gsettings get org.gnome.desktop.input-sources sources | sed s,^,SOURCES-,
 if test -S "/run/user/$uid/pipewire-0"; then echo SOUND-ready; fi
-# The GNOME services and helpers of the module are there.
+# The GNOME services and helpers of the module are there (also Users and
+# Online Accounts of Settings: accountsservice, gnome-online-accounts).
 missing=""
 for f in /usr/bin/gnome-disks /usr/lib/fprintd /usr/bin/boltctl \
     /usr/bin/monitor-sensor /usr/lib/gvfsd-mtp /usr/lib/gvfsd-gphoto2 \
     /usr/lib/gvfsd-afc /usr/lib/gvfsd-smb /usr/lib/gvfsd-nfs \
     /usr/lib/bluetooth/obexd /usr/lib/NetworkManager/VPN/nm-openvpn-service.name \
-    /usr/bin/xdg-open /usr/bin/glxinfo /usr/bin/vulkaninfo; do
+    /usr/bin/xdg-open /usr/bin/glxinfo /usr/bin/vulkaninfo \
+    /usr/lib/accounts-daemon /usr/lib/goa-daemon; do
     test -e "$f" || missing="$missing $f"
 done
 echo "GNOME-missing:${missing:- none}"

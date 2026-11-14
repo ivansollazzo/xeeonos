@@ -74,8 +74,20 @@ versione** → Run workflow (on `stable`), `.github/workflows/release.yml`:
    (a new snapshot, something important, a backport);
 2. builds and runs every test (`build.yml`);
 3. only if all are green: publishes the signed update as `26.12.2` and on
-   the channel `stable`, and tags the commit `v26.12.2`. If anything is red,
-   nothing is published.
+   the channel `stable`, and the GitHub release `v26.12.2` with the ISO
+   (which tags the commit `v26.12.2`). If anything is red, nothing is
+   published.
+
+**The ISO is on GitHub Releases**, the one the tests installed from, with
+`SHA256SUMS` signed by the update signing key (`SHA256SUMS.gpg`):
+
+| Channel | Release | Kept |
+|---|---|---|
+| `testing` | pre-release `v26.12-testing.7`, never "Latest" | only the newest (older testing pre-releases and their tags are deleted) |
+| `stable` | release `v26.12.2`, marked "Latest" | all |
+
+GitHub takes files up to 2 GiB: a bigger ISO is not published (the run
+shows a warning) and stays only in the run's artifact `xeeonos-iso`.
 
 **Arch snapshots are chosen by hand.** Actions → **Nuovo snapshot** → Run
 workflow (`.github/workflows/snapshot.yml`): the branch (testing)

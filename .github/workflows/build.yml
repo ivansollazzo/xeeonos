@@ -364,7 +364,7 @@ jobs:
     if: github.event_name == 'push' || inputs.version != ''
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write # the GitHub release with the ISO
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -422,3 +422,55 @@ jobs:
             -f event_type=xeeonos-published \
             -f "client_payload[version]=$VERSION" -f "client_payload[channel]=$CHANNEL"
           echo "xeeonos-extensions told about $VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download the ISO
+        if: env.CHANNEL != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xeeonos-iso
+          path: out/iso
+
+      # The ISO the tests installed from, on GitHub Releases (docs/updates.md):
+      # testing -> pre-release v26.11-testing.42, and only the newest one is
+      # kept (older testing pre-releases and their tags are deleted);
+      # stable  -> release v26.12.2 marked "Latest", all kept.
+      # With SHA256SUMS signed by the update signing key. The release makes
+      # the tag v<version> on the commit that was built.
+      - name: Publish the ISO on GitHub Releases
+        if: env.CHANNEL != ''
+        env:
+          SIGNING_KEY_ARMORED: ${{ secrets.XEEONOS_SIGNING_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -z $SIGNING_KEY_ARMORED ]]; then
+            echo "::warning::XEEONOS_SIGNING_KEY is not set: ISO not published"
+            exit 0
+          fi
+          cd out/iso
+          iso=xeeonos-$VERSION.iso
+          size=$(stat -c %s "$iso")
+          if (( size >= 2 * 1024 * 1024 * 1024 )); then
+            echo "::warning::$iso is $((size / 1024 / 1024)) MiB, over the 2 GiB limit of GitHub Releases: ISO not published"
+            exit 0
+          fi
+          sha256sum "$iso" > SHA256SUMS
+          export GNUPGHOME=$RUNNER_TEMP/iso-gnupg
+          mkdir -m 700 "$GNUPGHOME"
+          gpg --batch --import <<< "$SIGNING_KEY_ARMORED"
+          key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
+          gpg --batch --yes --local-user "$key" --detach-sign --output SHA256SUMS.gpg SHA256SUMS
+
+          notes="XeeonOS $VERSION (channel $CHANNEL). Check the download: gpgv --keyring <XeeonOS key> SHA256SUMS.gpg SHA256SUMS && sha256sum -c SHA256SUMS"
+          flags=(--latest)
+          [[ $CHANNEL == testing ]] && flags=(--prerelease --latest=false)
+          gh release create "v$VERSION" "$iso" SHA256SUMS SHA256SUMS.gpg \
+            --target "$GITHUB_SHA" --title "XeeonOS $VERSION" --notes "$notes" "${flags[@]}"
+          if [[ $CHANNEL == testing ]]; then
+            # Only the newest testing pre-release stays: older ones go, with their tags.
+            gh release list --limit 100 --json tagName \
+              --jq ".[].tagName | select(test(\"-testing\\\\.[0-9]+$\") and . != \"v$VERSION\")" |
+              while read -r old; do
+                gh release delete "$old" --yes --cleanup-tag
+              done
+          fi
+          echo "ISO on GitHub Releases: v$VERSION" >> "$GITHUB_STEP_SUMMARY"

@@ -96,7 +96,10 @@ Le versioni seguono il mese (`AA.MM`: 26.11, a gennaio 27.1). Ramo = canale
 workflow" scegliendo il ramo `stable`. Il workflow calcola il numero
 (`AA.MM.S`: S cresce a ogni pubblicazione del mese, poi riparte: 26.12.1,
 26.12.2, 27.1.1), costruisce, fa tutti i test e, solo se è tutto verde,
-pubblica la versione firmata sul canale `stable` e crea il tag `v26.12.2`.
+pubblica la versione firmata sul canale `stable` e crea la release GitHub
+`v26.12.2` con la ISO (segnata "Latest"; crea anche il tag `v26.12.2`).
+Ogni merge su `testing` mette la sua ISO in una pre-release
+(`v26.12-testing.7`): resta solo l'ultima.
 Se qualcosa è rosso non esce niente: correggi su `stable` e rilancia. I
 merge su `stable` da soli non pubblicano niente.
 

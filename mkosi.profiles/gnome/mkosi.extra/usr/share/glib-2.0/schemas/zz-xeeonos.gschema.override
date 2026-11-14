@@ -1,0 +1,12 @@
+# XeeonOS defaults for GNOME (compiled by mkosi.profiles/gnome/mkosi.postinst).
+# Overrides are read in name order: "zz-" comes after the packages' own, so
+# these win.
+
+# No Arch Linux logo on the login screen (the gdm package sets one). The
+# XeeonOS logo goes here once there is one.
+[org.gnome.login-screen]
+logo=''
+
+# "Log Out" in the system menu also with a single user (GNOME hides it then).
+[org.gnome.shell]
+always-show-log-out=true

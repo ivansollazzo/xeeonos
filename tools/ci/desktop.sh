@@ -78,6 +78,23 @@ systemctl is-active switcheroo-control.service | sed s,^,SWITCHEROO-,
 for d in /dev/mapper/root /dev/mapper/usr /dev/disk/by-partlabel/xeeonos-root; do
     udevadm info -q property "$d" | grep -q '^UDISKS_IGNORE=1' && echo "HIDDEN-$(basename "$d")"
 done
+# Nor are the images of the system extensions (loop devices).
+extensions=0 shown=""
+for l in /sys/block/loop*; do
+    backing=$(cat "$l/loop/backing_file" 2>/dev/null) || continue
+    case $backing in
+        /usr/lib/xeeonos/extensions/* | /var/lib/xeeonos/extensions/* | /run/extensions/* | *.xext) ;;
+        *) continue ;;
+    esac
+    extensions=$((extensions + 1))
+    udevadm info -q property "/dev/${l##*/}" | grep -q '^UDISKS_IGNORE=1' || shown="$shown ${l##*/}:$backing"
+done
+echo "EXT-LOOPS-$extensions shown:${shown:- none}"
+# No Arch Linux logo on the login screen; "Log Out" with a single user.
+runuser -u test -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+    gsettings get org.gnome.login-screen logo | sed s,^,LOGO-,
+runuser -u test -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+    gsettings get org.gnome.shell always-show-log-out | sed s,^,LOGOUT-,
 SCRIPT
 TIMEOUT=900 tools/boot-test.sh \
     --setup out/setup.txt \
@@ -94,4 +111,7 @@ TIMEOUT=900 tools/boot-test.sh \
     --expect "HIDDEN-root" \
     --expect "HIDDEN-usr" \
     --expect "HIDDEN-xeeonos-root" \
+    --expect "EXT-LOOPS-[1-9][0-9]* shown: none" \
+    --expect "LOGO-''" \
+    --expect "LOGOUT-true" \
     out/disk.raw out/serial-desktop.log

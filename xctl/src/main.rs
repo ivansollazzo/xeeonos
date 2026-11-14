@@ -62,6 +62,9 @@ mod config {
     /// Where systemd-sysext looks for the extensions to lay over /usr.
     pub const EXTENSIONS_RUN: &str = "/run/extensions";
     pub const EXTENSIONS_CACHE: &str = "/var/cache/xctl/ext";
+    /// The GSettings schemas of the system and of the extensions on,
+    /// compiled together (GSETTINGS_SCHEMA_DIR, usr/lib/environment.d).
+    pub const SCHEMAS_RUN: &str = "/run/xeeonos/gsettings";
     /// One empty file per extension whose Setup= script has run.
     pub const EXTENSIONS_SETUP: &str = "/var/lib/xeeonos/extensions-setup";
     /// Present only in the live ISO (mkosi.profiles/live).

@@ -2,7 +2,8 @@
 # GNOME (mkosi.profiles/gnome): after the first-boot setup, the login screen
 # (GDM: GNOME Shell of its own greeter user, Wayland) starts, with the keyboard chosen
 # at setup; then the user's GNOME session starts (automatic login, set by the
-# test) with that keyboard as its input source and with sound (PipeWire). No
+# test) with that keyboard as its input source and with sound (PipeWire), and
+# the applications of the included extensions start. No
 # GPU in the VM: GNOME Shell draws with Mesa's software renderer.
 source "$(dirname "$0")/common.sh"
 fresh_disk
@@ -61,6 +62,27 @@ uid=$(id -u test)
 runuser -u test -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
     gsettings get org.gnome.desktop.input-sources sources | sed s,^,SOURCES-,
 if test -S "/run/user/$uid/pipewire-0"; then echo SOUND-ready; fi
+runuser -u test -- env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+    gsettings get org.gnome.desktop.wm.preferences button-layout | sed s,^,BUTTONS-,
+# The applications of the included extensions start (their settings are
+# compiled with the system's at boot, GSETTINGS_SCHEMA_DIR): still running
+# after 20 seconds (124: stopped by timeout) or handed to the instance
+# already running (0).
+session_env=$(runuser -u test -- env XDG_RUNTIME_DIR="/run/user/$uid" \
+    systemctl --user show-environment)
+echo "$session_env" | grep '^GSETTINGS_SCHEMA_DIR=' | sed s,^,ENV-,
+for app in gnome-software simple-scan; do
+    runuser -u test -- env $(echo "$session_env" | grep -E \
+        '^(DBUS_SESSION_BUS_ADDRESS|XDG_RUNTIME_DIR|WAYLAND_DISPLAY|GSETTINGS_SCHEMA_DIR|XDG_DATA_DIRS)=') \
+        timeout 20 "$app" >/tmp/$app.log 2>&1
+    rc=$?
+    if test $rc = 124 || test $rc = 0; then
+        echo "APP-$app-starts"
+    else
+        echo "APP-$app-failed $rc"
+        sed "s,^,DIAG-$app: ," /tmp/$app.log | tail -20
+    fi
+done
 # The GNOME services and helpers of the module are there (also Users and
 # Online Accounts of Settings: accountsservice, gnome-online-accounts).
 missing=""
@@ -106,6 +128,10 @@ TIMEOUT=900 tools/boot-test.sh \
     --expect "DESKTOP-[0-9]+ gnome-shell" \
     --expect "SOURCES-.*'xkb', 'it'" \
     --expect "SOUND-ready" \
+    --expect "BUTTONS-'appmenu:minimize,maximize,close'" \
+    --expect "ENV-GSETTINGS_SCHEMA_DIR=/run/xeeonos/gsettings" \
+    --expect "APP-gnome-software-starts" \
+    --expect "APP-simple-scan-starts" \
     --expect "GNOME-missing: none" \
     --expect "SWITCHEROO-active" \
     --expect "HIDDEN-root" \

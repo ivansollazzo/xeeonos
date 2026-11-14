@@ -100,7 +100,13 @@ the same way. One directory per extension in `extensions/<name>/`:
 `tools/mkext.sh` builds them all (CI does it before the system). Only `/usr`
 is laid over the system: what packages put in `/etc` moves to
 `/usr/share/factory/etc`, `/opt/<x>` to `/usr/lib/xeeonos/opt/<x>` (with a link
-back), directories in `/var` become `tmpfiles.d` lines.
+back), directories in `/var` become `tmpfiles.d` lines. The packages' own
+install hooks do not run: what they would do at install time is done when
+the extensions are laid over `/usr` (`xctl extensions activate`, and when one
+is turned on or off): users (`systemd-sysusers`), device rules, units, and
+the settings of their applications (GSettings schemas, compiled with the
+system's into `/run/xeeonos/gsettings`, where `GSETTINGS_SCHEMA_DIR` points:
+without them GNOME Software or Document Scanner would not start).
 
 An extension from outside: any `systemd-sysext` image whose
 `usr/lib/extension-release.d/extension-release.<name>` says `ID=xeeonos` and

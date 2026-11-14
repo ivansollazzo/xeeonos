@@ -26,7 +26,7 @@ encryption tools/ci/encryption.sh xctl/src/encryption.rs xctl/src/setup.rs
 base tools/ci/base.sh xctl/src/firewall.rs xctl/src/report.rs xctl/src/packages.rs
 snapshots tools/ci/snapshots.sh xctl/src/snapshots.rs xctl/src/update.rs
 hibernate tools/ci/hibernate.sh
-desktop tools/ci/desktop.sh
+desktop tools/ci/desktop.sh xctl/src/ext.rs extensions/flatpak/ extensions/scanner/
 tools tools/ci/tools.sh mkosi.conf.d/tools/ xctl/src/ssh.rs xctl/src/firewall.rs
 flatpak tools/ci/flatpak.sh extensions/flatpak/ tools/mkext.sh tools/mkext-install.sh xctl/src/ext.rs xctl/src/apps.rs
 printing tools/ci/printing.sh extensions/printing/ tools/mkext.sh tools/mkext-install.sh xctl/src/ext.rs

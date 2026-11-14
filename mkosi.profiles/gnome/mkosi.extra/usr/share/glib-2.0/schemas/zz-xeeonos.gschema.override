@@ -10,3 +10,8 @@ logo=''
 # "Log Out" in the system menu also with a single user (GNOME hides it then).
 [org.gnome.shell]
 always-show-log-out=true
+
+# Minimize and maximize buttons in window title bars, next to close (GNOME
+# shows only close).
+[org.gnome.desktop.wm.preferences]
+button-layout='appmenu:minimize,maximize,close'

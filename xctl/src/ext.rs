@@ -977,7 +977,30 @@ fn unlink(name: &str) {
 fn after_refresh() -> Result<()> {
     run_program("systemd-sysusers", &[])?;
     let _ = run_program("udevadm", &["control", "--reload"]);
+    compile_schemas();
     run_program("systemctl", &["daemon-reload"])
+}
+
+/// The settings (GSettings schemas) of the applications in the extensions.
+/// The system's compiled list (/usr/share/glib-2.0/schemas/gschemas.compiled)
+/// was made without them, and an application whose settings are missing
+/// does not start (GNOME Software, Document Scanner). /usr cannot be
+/// written: compile the system's and the extensions' together into /run,
+/// which GSETTINGS_SCHEMA_DIR points to (usr/lib/environment.d).
+fn compile_schemas() {
+    let schemas = "/usr/share/glib-2.0/schemas";
+    if !Path::new(schemas).is_dir() || !Path::new("/usr/bin/glib-compile-schemas").exists() {
+        return;
+    }
+    let compiled = fs::create_dir_all(config::SCHEMAS_RUN).is_ok()
+        && run_program(
+            "glib-compile-schemas",
+            &["--targetdir", config::SCHEMAS_RUN, schemas],
+        )
+        .is_ok();
+    if !compiled {
+        println!("Extensions: could not compile the settings of their applications");
+    }
 }
 
 /// The hooks and services of extensions just laid over /usr: Disable=

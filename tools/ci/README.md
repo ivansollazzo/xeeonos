@@ -30,7 +30,7 @@ channel branches (after a merge, before publishing) always run every test.
 | `hibernate.sh` | hibernate into the swap file, start again: the session resumes | disk image |
 | `secureboot.sh` | Secure Boot (firmware without keys): keys enrolled, signed start, TPM unlock without password, signed update, another TPM asks the password | disk image, next version |
 | `encryption.sh` | disk password on and off (recovery key), then a normal start | disk image |
-| `iso-install.sh` | live ISO boots, installs on a blank disk, installed system boots | live image, system |
+| `iso-install.sh` | live ISO boots, installs on a blank disk, installed system boots; the network ISO downloads the system and installs it | live image, system |
 | `iso-alongside.sh` | install next to another system | live image, system |
 
 Environment: `VERSION` (and `NEXT` for update.sh) from `tools/version.sh`;

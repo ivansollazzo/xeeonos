@@ -78,16 +78,24 @@ versione** → Run workflow (on `stable`), `.github/workflows/release.yml`:
    (which tags the commit `v26.12.2`). If anything is red, nothing is
    published.
 
-**The ISO is on GitHub Releases**, the one the tests installed from, with
-`SHA256SUMS` signed by the update signing key (`SHA256SUMS.gpg`):
+**Two ISOs.** The **full ISO** carries the system and installs offline; at
+2.6 GB it is over GitHub's 2 GiB limit for release files, so it stays in
+the run's artifact `xeeonos-iso` (14 days). The **network ISO** carries only
+the live system (about 750 MB): `xctl install-system` downloads the system
+from the channel the ISO was built for, the same signed files as an update
+(it asks to set up the network if there is none). Both are tested
+(`Test iso-install`).
+
+**The network ISO is on GitHub Releases**, the one the tests installed from,
+with `SHA256SUMS` signed by the update signing key (`SHA256SUMS.gpg`):
 
 | Channel | Release | Kept |
 |---|---|---|
 | `testing` | pre-release `v26.12-testing.7`, never "Latest" | only the newest (older testing pre-releases and their tags are deleted) |
 | `stable` | release `v26.12.2`, marked "Latest" | all |
 
-GitHub takes files up to 2 GiB: a bigger ISO is not published (the run
-shows a warning) and stays only in the run's artifact `xeeonos-iso`.
+GitHub takes files up to 2 GiB: a bigger network ISO would not be published
+(the run shows a warning); it stays in the run's artifact `xeeonos-iso-net`.
 
 **Arch snapshots are chosen by hand.** Actions → **Nuovo snapshot** → Run
 workflow (`.github/workflows/snapshot.yml`): the branch (testing)

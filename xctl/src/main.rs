@@ -141,8 +141,12 @@ Commands:
       --separate-boot    With --free-space: put the kernels in a new boot
                          partition, even if the EFI partition has room.
       --encrypt          Ask for a disk password at the first start.
-      --from <dir>       Install the version in <dir> instead of the one
-                         on the installation medium.
+      --from <source>    Install from <source> instead of the installation
+                         medium: a directory, a web directory
+                         (http[s]://...) or a registry (oci://...). The
+                         network ISO, which carries no system, downloads
+                         it from its channel (needs the network).
+      --keyring <file>   Also accept downloads signed by the keys in <file>.
       --yes              Do not ask for confirmation (for automated tests).
   network [<what>]       Network settings: without <what>, a screen to
                          choose a Wi-Fi network or set up a wired one.

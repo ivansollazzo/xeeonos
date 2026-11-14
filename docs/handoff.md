@@ -99,7 +99,11 @@ workflow" scegliendo il ramo `stable`. Il workflow calcola il numero
 pubblica la versione firmata sul canale `stable` e crea la release GitHub
 `v26.12.2` con la ISO (segnata "Latest"; crea anche il tag `v26.12.2`).
 Ogni merge su `testing` mette la sua ISO in una pre-release
-(`v26.12-testing.7`): resta solo l'ultima.
+(`v26.12-testing.7`): resta solo l'ultima. Nelle release c'è la ISO **di
+rete** (solo il sistema live, circa 750 MB: durante l'installazione scarica
+XeeonOS dal canale, serve Internet); la ISO **completa** (2,6 GB, installa
+senza rete) supera il limite di 2 GB di GitHub e resta nell'artifact
+`xeeonos-iso` della run.
 Se qualcosa è rosso non esce niente: correggi su `stable` e rilancia. I
 merge su `stable` da soli non pubblicano niente.
 

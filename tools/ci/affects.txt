@@ -35,5 +35,5 @@ extensions tools/ci/extensions.sh extensions/ tools/mkext.sh tools/mkext-install
 extensions xctl/src/ext.rs xctl/src/update.rs
 secureboot tools/ci/secureboot.sh tools/secureboot.sh xctl/src/secureboot.rs
 secureboot xctl/src/encryption.rs xctl/src/update.rs
-iso-install tools/ci/iso-install.sh tools/mkiso.sh mkosi.profiles/live/ xctl/src/install.rs xctl/src/setup.rs
+iso-install tools/ci/iso-install.sh tools/mkiso.sh mkosi.profiles/live/ xctl/src/install.rs xctl/src/setup.rs xctl/src/update.rs xctl/src/oci.rs
 iso-alongside tools/ci/iso-alongside.sh tools/mkiso.sh mkosi.profiles/live/ xctl/src/install.rs

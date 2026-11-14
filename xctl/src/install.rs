@@ -8,11 +8,15 @@
 //!   boot partition (XBOOTLDR, 1 GiB) is created in the free space;
 //! - manually: the same two, with every choice asked.
 //!
-//! The ISO carries the system to install in its `xeeonos/` directory: the
-//! same files as an update (kernel, /usr and its verity hash tree, compressed,
-//! with a SHA256SUMS manifest). Installing means:
+//! The full ISO carries the system to install in its `xeeonos/` directory:
+//! the same files as an update (kernel, /usr and its verity hash tree,
+//! compressed, with a SHA256SUMS manifest). The network ISO (the one on
+//! GitHub Releases, small enough for it) carries only the live system: the
+//! system to install is downloaded from the channel the ISO was built for,
+//! signed like every update. Installing means:
 //!
-//! 1. check the files against the manifest;
+//! 1. get the files (from the ISO, or downloaded and their signature
+//!    checked), and check them against the manifest;
 //! 2. create the partitions with systemd-repart: the EFI System Partition
 //!    (if needed) and /usr slot A (verity + data), exactly as in the disk image;
 //! 3. decompress /usr and its hash tree straight onto their partitions;
@@ -31,7 +35,10 @@ use std::process::{Command, Stdio};
 use serde_json::Value;
 
 use crate::ui;
-use crate::update::{check_hashes, newest_version};
+use crate::update::{
+    Cleanup, Source, check_hashes, fetch_files, fetch_manifest, manifest_files, newest_version,
+    versions_in,
+};
 use crate::util::{Result, err, need_root, output, run};
 use crate::{boot, config};
 
@@ -152,11 +159,15 @@ pub fn run_install(args: &[String]) -> Result<()> {
     let mut free_space = false;
     let mut separate_boot = false;
     let mut encrypt = false;
+    let mut keyrings = vec![PathBuf::from(config::KEYRING)];
     let mut it = args.iter();
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--disk" => disk_arg = Some(it.next().ok_or_else(|| err("--disk needs a device"))?),
-            "--from" => from = Some(it.next().ok_or_else(|| err("--from needs a directory"))?),
+            "--from" => from = Some(it.next().ok_or_else(|| err("--from needs a source"))?),
+            "--keyring" => keyrings.push(PathBuf::from(
+                it.next().ok_or_else(|| err("--keyring needs a file"))?,
+            )),
             "--yes" => yes = true,
             "--encrypt" => encrypt = true,
             "--free-space" => free_space = true,
@@ -177,12 +188,26 @@ pub fn run_install(args: &[String]) -> Result<()> {
         ));
     }
 
-    // 1. The files to install, checked against their manifest.
-    let (dir, _mount) = match from {
-        Some(f) => (PathBuf::from(f), None),
+    // 1. The files to install, checked against their manifest: from a
+    //    directory (the full ISO's `xeeonos/`), or downloaded (the network
+    //    ISO, or --from a web directory or registry).
+    let download = std::env::temp_dir().join(format!("xctl-install-{}", std::process::id()));
+    let _cleanup = Cleanup(&download);
+    let (dir, _mount) = match from.map(|f| Source::parse(f)) {
+        Some(Source::Dir(d)) => (d, None),
+        Some(source) => {
+            fetch_system(&source, &download, &keyrings)?;
+            (download.clone(), None)
+        }
         None => {
             let mount = Mount::medium()?;
-            (mount.0.join(MEDIUM_DIR), Some(mount))
+            let on_medium = mount.0.join(MEDIUM_DIR);
+            if on_medium.join("SHA256SUMS").exists() {
+                (on_medium, Some(mount))
+            } else {
+                fetch_system(&channel_source()?, &download, &keyrings)?;
+                (download.clone(), Some(mount))
+            }
         }
     };
     let payload = find_payload(&dir)?;
@@ -287,6 +312,77 @@ pub fn run_install(args: &[String]) -> Result<()> {
         ui::message("Installing XeeonOS", &done)?;
     }
     println!("{done}");
+    Ok(())
+}
+
+/// Where the network ISO downloads the system: the registry tag of the
+/// channel it was built for (testing, stable).
+fn channel_source() -> Result<Source> {
+    let channel = crate::channel::current()?.ok_or_else(|| {
+        err("this installation medium carries no system and follows no channel; use --from <source>")
+    })?;
+    let tag = crate::channel::resolve(&channel)?;
+    Ok(Source::Oci(format!("{}:{tag}", config::REGISTRY)))
+}
+
+/// Download the system to install into `dir`: the signed manifest (its
+/// signature checked), then only the files that are installed (kernel, /usr,
+/// verity), not the extensions or the package list. They stay in memory
+/// (the live system runs from RAM) until the installation is done.
+fn fetch_system(source: &Source, dir: &Path, keyrings: &[PathBuf]) -> Result<()> {
+    let _ = fs::remove_dir_all(dir);
+    fs::create_dir_all(dir)?;
+    wait_for_network()?;
+    ui::working("Installing XeeonOS", "Downloading XeeonOS (about 2 GB)...");
+    fetch_manifest(source, dir, keyrings)?;
+    let names = manifest_files(&fs::read_to_string(dir.join("SHA256SUMS"))?)?;
+    let wanted = files_to_install(&names)?;
+    fetch_files(source, dir, &wanted)
+}
+
+/// Of the files of an update, those that are installed: the kernel, /usr
+/// and its verity hash tree of the newest version.
+fn files_to_install(names: &[String]) -> Result<Vec<String>> {
+    let version = versions_in(names)
+        .into_iter()
+        .max_by(|a, b| crate::version::compare(a, b))
+        .ok_or_else(|| err("the source contains no XeeonOS version"))?;
+    let kernel = format!("xeeonos_{version}.efi");
+    let usr = format!("xeeonos_{version}.usr-");
+    Ok(names
+        .iter()
+        .filter(|n| **n == kernel || (n.starts_with(&usr) && n.ends_with(".raw.zst")))
+        .cloned()
+        .collect())
+}
+
+/// The download needs the network. Interactively, until there is a
+/// connection, offer the network settings (Wi-Fi needs a password); without
+/// a terminal, give it a minute and let the download report the error.
+fn wait_for_network() -> Result<()> {
+    let online = |seconds: &str| {
+        Command::new("nm-online")
+            .args(["--quiet", "--timeout", seconds])
+            .status()
+            .is_ok_and(|s| s.success())
+    };
+    if !ui::interactive() {
+        online("60");
+        return Ok(());
+    }
+    ui::working("Installing XeeonOS", "Connecting to the network...");
+    while !online("15") {
+        let set_up = ui::yes_no(
+            "Network",
+            "This installation medium downloads XeeonOS (about 2 GB): it needs a \
+             connection to the Internet, and there is none.\n\nSet up the network now?",
+            false,
+        )?;
+        if !set_up {
+            return Err(err("no network; nothing was changed"));
+        }
+        crate::network::screen()?;
+    }
     Ok(())
 }
 
@@ -1012,6 +1108,31 @@ mod tests {
             with_enroll_force("#timeout 3\nsecure-boot-enroll manual\neditor no"),
             "#timeout 3\neditor no\nsecure-boot-enroll force\n"
         );
+    }
+
+    #[test]
+    fn installed_files() {
+        let names: Vec<String> = [
+            "SHA256SUMS",
+            "ci-hello.conf",
+            "xeeonos_26.11-testing.9.build.txt",
+            "xeeonos_26.11-testing.9.ci-hello.xext",
+            "xeeonos_26.11-testing.9.efi",
+            "xeeonos_26.11-testing.9.pkgdb.tar.zst",
+            "xeeonos_26.11-testing.9.usr-x86-64-verity.3cbb.raw.zst",
+            "xeeonos_26.11-testing.9.usr-x86-64.d699.raw.zst",
+        ]
+        .map(String::from)
+        .to_vec();
+        assert_eq!(
+            files_to_install(&names).unwrap(),
+            [
+                "xeeonos_26.11-testing.9.efi",
+                "xeeonos_26.11-testing.9.usr-x86-64-verity.3cbb.raw.zst",
+                "xeeonos_26.11-testing.9.usr-x86-64.d699.raw.zst",
+            ]
+        );
+        assert!(files_to_install(&["SHA256SUMS".to_string()]).is_err());
     }
 
     #[test]

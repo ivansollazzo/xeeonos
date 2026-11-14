@@ -8,7 +8,8 @@
 #
 # With a system directory (made by tools/mkupdate.sh), the ISO also carries
 # the system that `xctl install-system` installs, in xeeonos/ on the ISO file
-# system.
+# system (full ISO, installs offline). Without it, it is a network ISO:
+# `xctl install-system` downloads the system from the channel.
 #
 # Usage: tools/mkiso.sh <uki.efi> <output.iso> [system dir]
 # Needs: mkfs.fat (dosfstools), mmd/mcopy (mtools), xorriso.
@@ -33,7 +34,11 @@ mcopy -i "$work/efiboot.img" "$uki" ::/EFI/BOOT/BOOTX64.EFI
 
 mkdir -p "$work/root"
 # The UKI lives only in the ESP image, so the ISO is not twice its size.
-printf 'XeeonOS live ISO. Boot it in UEFI mode.\n' > "$work/root/README.txt"
+if [[ -n $system ]]; then
+    printf 'XeeonOS live ISO. Boot it in UEFI mode.\n' > "$work/root/README.txt"
+else
+    printf 'XeeonOS network ISO. Boot it in UEFI mode; installing downloads XeeonOS (needs the Internet).\n' > "$work/root/README.txt"
+fi
 contents=("/=$work/root")
 # The system's files, without the optional extensions (.xext): those are
 # downloaded where they are turned on (xctl extensions), not installed.

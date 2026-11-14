@@ -11,10 +11,9 @@ it: they come from [Flathub](https://flathub.org/) as Flatpak applications.
   installed once, in `/var/lib/flatpak`, for every user. It is on the data
   partition, so applications stay across system updates and are updated on
   their own.
-- With the Plasma desktop, **Discover** is the app store: search, install,
-  update and remove applications there. Installing asks for the password of
-  an administrator. The permissions of each application are in System
-  Settings.
+- **GNOME Software** is the app store: search, install, update and remove
+  applications there. Installing asks for the password of an administrator.
+  The permissions of each application are in Settings, Apps.
 - From a terminal:
 
   ```
@@ -36,4 +35,4 @@ system remote.
 
 `tools/ci/flatpak.sh`: Flathub is there for the system and for the user
 created by the setup, installed applications would appear in the menus, and
-Discover has its Flatpak support.
+GNOME Software has its Flatpak support.

@@ -171,7 +171,7 @@ jobs:
         if: env.REUSE != 'yes'
         run: |
           mkdir -p mkosi.cache mkosi.pkgcache out/update-system
-          mkosi --force --profile=plasma,audio --format=tar --bootable=no --image-version="$VERSION" build
+          mkosi --force --profile=gnome,audio --format=tar --bootable=no --image-version="$VERSION" build
           mv "mkosi.output/xeeonos_$VERSION.pkgdb.tar" "$RUNNER_TEMP/pkgdb.tar"
           # Published with the update: the extensions' repository builds them
           # for this version from its package list and Arch snapshot.
@@ -188,7 +188,7 @@ jobs:
         if: env.REUSE != 'yes'
         run: |
           mkdir -p out/disk-image
-          mkosi $SECUREBOOT --force --profile=plasma,audio --extra-tree=out/extensions:/usr/lib/xeeonos/extensions --image-version="$VERSION" build
+          mkosi $SECUREBOOT --force --profile=gnome,audio --extra-tree=out/extensions:/usr/lib/xeeonos/extensions --image-version="$VERSION" build
           ls -lhs mkosi.output/
           zstd -T0 --quiet "mkosi.output/xeeonos_$VERSION.raw" -o "out/disk-image/xeeonos_$VERSION.raw.zst"
           tools/mkupdate.sh mkosi.output "$VERSION" out/update-system
@@ -197,7 +197,7 @@ jobs:
       - name: Build the next version (for the update test)
         if: env.REUSE != 'yes'
         run: |
-          mkosi $SECUREBOOT --force --profile=plasma,audio --extra-tree=out/extensions:/usr/lib/xeeonos/extensions --image-version="$NEXT" build
+          mkosi $SECUREBOOT --force --profile=gnome,audio --extra-tree=out/extensions:/usr/lib/xeeonos/extensions --image-version="$NEXT" build
           tools/mkupdate.sh mkosi.output "$NEXT" out/update-next
           rm -rf mkosi.output
 

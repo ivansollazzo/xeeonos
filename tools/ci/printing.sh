@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Extension printing (extensions/printing, included): CUPS starts on demand and can
 # add a printer, network printers can be found (Avahi, .local names), and
-# Plasma has its Printers page.
+# the Printers page of GNOME Settings can manage printers (cups-pk-helper).
 source "$(dirname "$0")/common.sh"
 fresh_disk
 printf '%s\n' language=en_US.UTF-8 hostname=xeeonos-ci user=test \
@@ -18,7 +18,7 @@ lpadmin -p ci -E -v socket://127.0.0.1:9100 -m raw 2>&1 | sed s,^,LPADMIN-,
 lpstat -p ci | sed s,^,PRINTER-,
 systemctl is-active avahi-daemon.service | sed s,^,AVAHI-,
 grep '^hosts:' /etc/nsswitch.conf | sed s,^,NSS-,
-find /usr/lib/qt6/plugins -name '*kcm_printer_manager*' | sed s,^,KCM-,
+test -x /usr/lib/cups-pk-helper-mechanism && echo PKHELPER-present
 xctl status --check
 SCRIPT
 tools/boot-test.sh \
@@ -32,6 +32,6 @@ tools/boot-test.sh \
     --expect "PRINTER-printer ci is idle" \
     --expect "AVAHI-active" \
     --expect "NSS-hosts:.*mdns_minimal" \
-    --expect "KCM-.*kcm_printer_manager" \
+    --expect "PKHELPER-present" \
     --expect "check: sealed system OK" \
     out/disk.raw out/serial-printing.log

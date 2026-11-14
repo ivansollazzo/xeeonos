@@ -44,8 +44,8 @@ change the settings one by one as below.
   `xctl network status`.
 - Users: `useradd`, `passwd`, `usermod -aG wheel <user>` as usual.
 
-With Plasma (Phase 2) the same settings are in System Settings, and the
-setup becomes a graphical assistant.
+With GNOME the same settings are in Settings; the setup may become a
+graphical assistant later.
 
 ## Unattended setup
 

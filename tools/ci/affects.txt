@@ -11,7 +11,7 @@
 
 # The system itself, its build, the boot, the test machinery.
 * mkosi.conf mkosi.initrd.conf mkosi.version mkosi.conf.d/base/
-* mkosi.conf.d/system/ mkosi.conf.d/xctl/ mkosi.profiles/plasma/ mkosi.profiles/audio/
+* mkosi.conf.d/system/ mkosi.conf.d/xctl/ mkosi.profiles/gnome/ mkosi.profiles/audio/
 * secureboot/ .github/workflows/build.yml tools/boot-test.sh tools/ci/common.sh
 * tools/ci/affects.txt tools/ci/affected.sh tools/image-key.sh tools/version.sh
 * xctl/Cargo.toml xctl/Cargo.lock xctl/src/main.rs xctl/src/util.rs xctl/src/ui.rs

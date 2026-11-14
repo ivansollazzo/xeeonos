@@ -39,7 +39,7 @@ snapshot of the Arch Linux Archive, set in `mkosi.conf`. mkosi uses its own Arch
 tree, so you can build from any Linux distribution.
 
 ```sh
-mkosi --force --profile=plasma,audio build   # sealed disk image with the KDE Plasma desktop:
+mkosi --force --profile=gnome,audio build    # sealed disk image with the GNOME desktop:
                                              # mkosi.output/xeeonos_<version>.raw
                                              # (without --profile: no desktop, text console only)
 tools/boot-test.sh mkosi.output/xeeonos_26.11-dev.0.raw   # first boot in QEMU + `xctl status --check`
@@ -132,6 +132,6 @@ product: please report problems with XeeonOS
 
 0. **Foundations**: mkosi base on Arch, CI, live ISO. *(done)*
 1. *(in progress)* A/B `/usr` partitions with dm-verity, `systemd-sysupdate`, automatic rollback, installer.
-2. KDE Plasma desktop and speed work.
+2. GNOME desktop and speed work.
 3. `.xapp` applications in `/Applications`.
 4. Public release 0.1.

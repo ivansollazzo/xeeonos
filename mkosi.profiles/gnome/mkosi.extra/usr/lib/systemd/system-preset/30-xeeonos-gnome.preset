@@ -1,4 +1,4 @@
-# Services of the Plasma desktop, enabled by default.
+# Services of the GNOME desktop, enabled by default.
 # The login screen (display-manager.service): after the first-boot setup.
-enable sddm.service
+enable gdm.service
 enable power-profiles-daemon.service

@@ -9,14 +9,24 @@ The published XeeonOS images have the GNOME desktop (module
 - **Settings** for network (NetworkManager), sound, Bluetooth, screens,
   power (power profiles) and printers, all in one place. Sound (PipeWire) is
   the module `audio`, Bluetooth is part of the core system, printers come
-  with the extension `printing` (see [printing.md](printing.md));
+  with the extension `printing` (see [printing.md](printing.md)), scanners
+  with the extension `scanner` (see [scanner.md](scanner.md));
 - the applications that must be part of the system: **Console** (terminal),
   **Files** (Nautilus, which also opens archives) and **System Monitor**
-  (processes and resources). Screenshots are part of GNOME Shell. Every
+  (processes and resources), and **Disks** (format USB sticks, disk
+  health, disk images). Screenshots are part of GNOME Shell. Every
   other application comes from Flathub, with **GNOME Software** as the app
   store (extension `flatpak`, see [flatpak.md](flatpak.md));
+- the services GNOME uses by itself and shows in Settings: the
+  **fingerprint reader** (fprintd: login and unlock), **Thunderbolt and
+  USB4** devices (bolt), automatic **rotation and brightness**
+  (iio-sensor-proxy), "Launch using Discrete Graphics Card" on laptops with
+  **two GPUs** (switcheroo-control), **OpenVPN** connections, files over
+  **Bluetooth**;
+- in Files: **phones** (MTP) and cameras, **iPhones**, **shared folders**
+  of Windows, NAS and NFS;
 - graphics with Mesa for Intel, AMD and Nouveau (OpenGL, Vulkan, video
-  decoding);
+  decoding); `glxinfo` and `vulkaninfo` tell which GPU draws;
 - the interface font is Adwaita Sans (part of GNOME); Noto fonts cover every
   other language, emoji included.
 

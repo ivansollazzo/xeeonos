@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # System extensions (xctl extensions, docs/extensions.md). One story on one disk:
-#   1. the included ones (flatpak, printing) are on; a special one is not
+#   1. the included ones (flatpak, printing, scanner) are on; a special one is not
 #      turned off without asking; ci-hello (optional, the CI's test
 #      extension, unknown to the system until then) is listed among those
 #      that can be downloaded, then downloaded from a signed source and
@@ -55,6 +55,7 @@ command -v flatpak >/dev/null || echo FLATPAK-gone
 " --http "$system" --credential "xctl.keyring=$RUNNER_TEMP/test-keyring.gpg" \
     --expect "flatpak +on +.*\(included, special\)" \
     --expect "printing +on +.*\(included, special\)" \
+    --expect "scanner +on +.*\(included, special\)" \
     --expect "NOT-KNOWN-ci-hello" \
     --expect "REMOTE-Can be downloaded for XeeonOS" \
     --expect "REMOTE- +ci-hello +Test extension of the CI.*\(optional\)" \

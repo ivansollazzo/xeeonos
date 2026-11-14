@@ -163,7 +163,7 @@ jobs:
           echo "SECUREBOOT=$(tr '\n' ' ' < "$RUNNER_TEMP/secureboot/mkosi-args")" >> "$GITHUB_ENV"
 
       # The system extensions (extensions/, docs/extensions.md), before the
-      # system: the included ones (flatpak, printing) go inside its image, the
+      # system: the included ones (flatpak, printing, scanner) go inside its image, the
       # optional ones (.xext) next to its update files. They hold only what
       # the system does not have, so the list of the system's packages comes
       # first: a build of the same system that only keeps that list.
@@ -277,6 +277,7 @@ jobs:
           - {test: tools, artifacts: disk-image}
           - {test: flatpak, artifacts: disk-image}
           - {test: printing, artifacts: disk-image}
+          - {test: scanner, artifacts: disk-image}
           - {test: extensions, artifacts: '{disk-image,update-system}'}
           - {test: secureboot, artifacts: '{disk-image,update-next}'}
           - {test: iso-install, artifacts: '{live,update-system}'}

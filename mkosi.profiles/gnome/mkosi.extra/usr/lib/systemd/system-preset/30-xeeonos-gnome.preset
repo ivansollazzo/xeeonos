@@ -2,3 +2,5 @@
 # The login screen (display-manager.service): after the first-boot setup.
 enable gdm.service
 enable power-profiles-daemon.service
+# Laptops with two GPUs: lets applications start on the discrete one.
+enable switcheroo-control.service

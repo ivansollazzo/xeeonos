@@ -38,6 +38,16 @@
 //!             Setup ran), to undo what Setup did
 //!   Boot=     a script run at every boot with the extension on
 //!
+//! Dependencies (also in the manifest):
+//!
+//!   Requires=  extensions it needs: turning it on offers to turn them on
+//!              too (downloading them); turning one of them off or
+//!              removing it turns this one off too, after asking. At boot,
+//!              an extension whose requirements are not all in place is
+//!              left out.
+//!   Conflicts= extensions that cannot be on together with it: turning it
+//!              on offers to turn them off.
+//!
 //! Turning one on or off takes effect at once: the extensions are laid over
 //! /usr again (systemd-sysext refresh), its services start or stop and its
 //! hooks run, in the running system. Except an extension with `Live=no`
@@ -84,6 +94,10 @@ pub struct Extension {
     pub live: bool,
     /// Installed from a file by the administrator (`xctl extensions install`).
     pub local: bool,
+    /// Extensions it needs (Requires=) and that cannot be on with it
+    /// (Conflicts=).
+    pub requires: Vec<String>,
+    pub conflicts: Vec<String>,
 }
 
 impl Default for Extension {
@@ -100,6 +114,8 @@ impl Default for Extension {
             boot: None,
             live: true,
             local: false,
+            requires: Vec::new(),
+            conflicts: Vec::new(),
         }
     }
 }
@@ -153,6 +169,8 @@ fn parse(name: &str, text: &str) -> Extension {
             "Cleanup" => ext.cleanup = script(value),
             "Boot" => ext.boot = script(value),
             "Live" => ext.live = value != "no",
+            "Requires" => ext.requires = words(value),
+            "Conflicts" => ext.conflicts = words(value),
             _ => {}
         }
     }
@@ -326,7 +344,7 @@ fn list(args: &[String]) -> Result<()> {
         rows.push((
             ext.name.clone(),
             state.to_string(),
-            format!("{} ({kind})", ext.description),
+            format!("{} ({kind}){}", ext.description, relations(ext)),
         ));
     }
 
@@ -360,7 +378,7 @@ fn list(args: &[String]) -> Result<()> {
         rows.push((
             ext.name.clone(),
             String::new(),
-            format!("{} ({kind})", ext.description),
+            format!("{} ({kind}){}", ext.description, relations(ext)),
         ));
     }
     let width = rows.iter().map(|r| r.0.len()).max().unwrap_or(0);
@@ -381,6 +399,105 @@ fn list(args: &[String]) -> Result<()> {
     }
     println!("Turn on or off with: sudo xctl extensions enable|disable <name>");
     Ok(())
+}
+
+/// What an extension needs and cannot be on with, for the list.
+fn relations(ext: &Extension) -> String {
+    let mut text = String::new();
+    if !ext.requires.is_empty() {
+        text.push_str(&format!("; needs: {}", ext.requires.join(", ")));
+    }
+    if !ext.conflicts.is_empty() {
+        text.push_str(&format!("; not with: {}", ext.conflicts.join(", ")));
+    }
+    text
+}
+
+/// The extensions `name` needs, directly or through others, those it needs
+/// first (each once; a loop is cut where it closes). `requires` gives an
+/// extension's Requires= (None: unknown here).
+fn needed(name: &str, requires: &dyn Fn(&str) -> Option<Vec<String>>) -> Vec<String> {
+    fn visit(
+        name: &str,
+        requires: &dyn Fn(&str) -> Option<Vec<String>>,
+        seen: &mut Vec<String>,
+        out: &mut Vec<String>,
+    ) {
+        if seen.iter().any(|s| s == name) {
+            return;
+        }
+        seen.push(name.to_string());
+        for dep in requires(name).unwrap_or_default() {
+            visit(&dep, requires, seen, out);
+            if !out.contains(&dep) && dep != seen[0] {
+                out.push(dep);
+            }
+        }
+    }
+    let (mut seen, mut out) = (Vec::new(), Vec::new());
+    visit(name, requires, &mut seen, &mut out);
+    out
+}
+
+/// The extensions among `on` that need `name`, directly or through others,
+/// the ones that need them first (to be turned off in this order).
+fn needing(name: &str, all: &[Extension], on: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut queue = vec![name.to_string()];
+    while let Some(current) = queue.pop() {
+        for ext in all {
+            if on.contains(&ext.name)
+                && ext.name != name
+                && ext.requires.contains(&current)
+                && !out.contains(&ext.name)
+            {
+                out.push(ext.name.clone());
+                queue.push(ext.name.clone());
+            }
+        }
+    }
+    out.reverse();
+    out
+}
+
+/// The extensions among `on` that cannot be on together with `ext` (its
+/// Conflicts=, or theirs naming it).
+fn in_conflict(ext: &Extension, all: &[Extension], on: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for other in all {
+        if other.name != ext.name
+            && on.contains(&other.name)
+            && (ext.conflicts.contains(&other.name) || other.conflicts.contains(&ext.name))
+            && !out.contains(&other.name)
+        {
+            out.push(other.name.clone());
+        }
+    }
+    out
+}
+
+/// The names of the extensions turned on.
+fn names_on() -> Vec<String> {
+    let choices = choices();
+    known()
+        .into_iter()
+        .filter(|e| is_on(e, &choices))
+        .map(|e| e.name)
+        .collect()
+}
+
+/// Ask a yes/no question, or take `yes` (--yes) as the answer.
+fn ask(yes: bool, title: &str, text: &str, what: &str) -> Result<bool> {
+    if yes {
+        println!("{text}");
+        return Ok(true);
+    }
+    if !crate::ui::interactive() {
+        return Err(err(format!(
+            "{text}\nThere is no terminal to ask on: give --yes to {what}."
+        )));
+    }
+    crate::ui::yes_no(title, text, false)
 }
 
 /// Is there a network connection (asked once, without waiting)?
@@ -456,14 +573,17 @@ fn active_now() -> Vec<String> {
     names
 }
 
-/// `xctl extensions enable <name> [--from <source>] [--keyring <file>] [--no-apply]`
+/// `xctl extensions enable <name> [--from <source>] [--keyring <file>] [--yes] [--no-apply]`
 fn enable(args: &[String]) -> Result<()> {
     // The name first, then the options.
     let (name, options) = match args.split_first() {
         Some((name, rest)) if !name.starts_with('-') => (Some(name.clone()), rest),
         _ => (None, args),
     };
-    let (from, keyrings, no_apply) = source_options(options, &["--no-apply"])?;
+    let mut options = options.to_vec();
+    let yes = options.iter().any(|o| o == "--yes");
+    options.retain(|o| o != "--yes");
+    let (from, keyrings, no_apply) = source_options(&options, &["--no-apply"])?;
     let name =
         name.ok_or_else(|| err("usage: xctl extensions enable <name> (see xctl extensions list)"))?;
     need_root("extensions enable")?;
@@ -482,10 +602,105 @@ fn enable(args: &[String]) -> Result<()> {
     if ext.image(&version).is_none() {
         download(&ext, &version, &source, &keyrings)?;
     }
-    set_choice(&name, true)?;
     // Downloaded just now: its manifest is known from here on.
     let ext = find(&name)?;
-    let state = turned_on(&ext, &version, no_apply)?;
+
+    // What it needs: known here, or published for this version.
+    let all = known();
+    let on = names_on();
+    let mut remote: Option<Vec<Extension>> = None;
+    if ext
+        .requires
+        .iter()
+        .any(|d| !all.iter().any(|a| &a.name == d))
+    {
+        remote = Some(published(&source, &version, &keyrings)?);
+    }
+    let lookup = |n: &str| -> Option<Vec<String>> {
+        all.iter()
+            .chain(remote.iter().flatten())
+            .find(|e| e.name == n)
+            .map(|e| e.requires.clone())
+    };
+    let deps = needed(&name, &lookup);
+    if let Some(missing) = deps.iter().find(|d| lookup(d).is_none()) {
+        return Err(err(format!(
+            "{name} needs the extension {missing}, which is not published for XeeonOS {version}"
+        )));
+    }
+    let deps_off: Vec<String> = deps.into_iter().filter(|d| !on.contains(d)).collect();
+    if !deps_off.is_empty()
+        && !ask(
+            yes,
+            "Extensions needed",
+            &format!(
+                "{name} needs: {}.\nThey will be turned on too.",
+                deps_off.join(", ")
+            ),
+            "turn them on",
+        )?
+    {
+        println!("Nothing changed.");
+        return Ok(());
+    }
+
+    // What cannot be on with it (or with what it needs), and what needs that.
+    let mut turning_on = deps_off.clone();
+    turning_on.push(name.clone());
+    let mut conflicting: Vec<String> = Vec::new();
+    for n in &turning_on {
+        let Some(e) = all
+            .iter()
+            .chain(remote.iter().flatten())
+            .find(|e| &e.name == n)
+        else {
+            continue;
+        };
+        for c in in_conflict(e, &all, &on) {
+            for x in needing(&c, &all, &on).into_iter().chain([c]) {
+                if !conflicting.contains(&x) && !turning_on.contains(&x) {
+                    conflicting.push(x);
+                }
+            }
+        }
+    }
+    if !conflicting.is_empty()
+        && !ask(
+            yes,
+            "Extensions in conflict",
+            &format!(
+                "{name} cannot be on together with: {}.\nThey will be turned off.",
+                conflicting.join(", ")
+            ),
+            "turn them off",
+        )?
+    {
+        println!("Nothing changed.");
+        return Ok(());
+    }
+    turn_off_all(&conflicting, no_apply)?;
+    for d in &deps_off {
+        let dep = match find(d) {
+            Ok(dep) => dep,
+            Err(_) => Extension {
+                name: d.clone(),
+                ..Default::default()
+            },
+        };
+        if dep.image(&version).is_none() {
+            download(&dep, &version, &source, &keyrings)?;
+        }
+        set_choice(d, true)?;
+        let dep = find(d)?;
+        let state = turned_on(&dep, &version, no_apply)?;
+        println!("Extension {d}: {state}.");
+    }
+    set_choice(&name, true)?;
+    // What it needs comes only at the next restart (kernel modules): so
+    // does it.
+    let active = active_now();
+    let wait = no_apply || needed(&name, &lookup).iter().any(|d| !active.contains(d));
+    let state = turned_on(&ext, &version, wait)?;
     println!("Extension {name}: {state}.");
     Ok(())
 }
@@ -615,6 +830,21 @@ fn disable(args: &[String]) -> Result<()> {
         .ok_or_else(|| err("usage: xctl extensions disable <name> (see xctl extensions list)"))?;
     need_root("extensions disable")?;
     let ext = find(&name)?;
+    let dependents = needing(&name, &known(), &names_on());
+    if !dependents.is_empty()
+        && !ask(
+            yes,
+            "Extensions that need it",
+            &format!(
+                "{} need {name}: they will be turned off too.",
+                dependents.join(", ")
+            ),
+            "turn them off",
+        )?
+    {
+        println!("Nothing changed.");
+        return Ok(());
+    }
 
     if ext.special {
         let warning = format!(
@@ -640,9 +870,21 @@ fn disable(args: &[String]) -> Result<()> {
             }
         }
     }
+    turn_off_all(&dependents, no_apply)?;
     set_choice(&name, false)?;
     turned_off(&ext, no_apply);
     println!("Extension {name}: {}.", off_state(&ext, no_apply));
+    Ok(())
+}
+
+/// Turn off these extensions, in this order.
+fn turn_off_all(names: &[String], no_apply: bool) -> Result<()> {
+    for n in names {
+        let other = find(n)?;
+        set_choice(n, false)?;
+        turned_off(&other, no_apply);
+        println!("Extension {n}: {}.", off_state(&other, no_apply));
+    }
     Ok(())
 }
 
@@ -791,6 +1033,12 @@ fn manifest_text(ext: &Extension) -> String {
     if !ext.live {
         text.push_str("Live=no\n");
     }
+    if !ext.requires.is_empty() {
+        text.push_str(&format!("Requires=\"{}\"\n", ext.requires.join(" ")));
+    }
+    if !ext.conflicts.is_empty() {
+        text.push_str(&format!("Conflicts=\"{}\"\n", ext.conflicts.join(" ")));
+    }
     for (key, value) in [
         ("Setup", &ext.setup),
         ("Cleanup", &ext.cleanup),
@@ -807,13 +1055,33 @@ fn manifest_text(ext: &Extension) -> String {
 /// images (downloaded, or installed from a file). An included one is part of the system image: it can
 /// only be turned off.
 fn remove(args: &[String]) -> Result<()> {
-    let [name] = args else {
+    let yes = args.iter().any(|a| a == "--yes");
+    let rest: Vec<&String> = args.iter().filter(|a| *a != "--yes").collect();
+    let [name] = rest[..] else {
         return Err(err(
-            "usage: xctl extensions remove <name> (see xctl extensions list)",
+            "usage: xctl extensions remove <name> [--yes] (see xctl extensions list)",
         ));
     };
     need_root("extensions remove")?;
     let ext = find(name)?;
+    if ext.included_image().is_none() {
+        let dependents = needing(name, &known(), &names_on());
+        if !dependents.is_empty() {
+            if !ask(
+                yes,
+                "Extensions that need it",
+                &format!(
+                    "{} need {name}: they will be turned off too.",
+                    dependents.join(", ")
+                ),
+                "turn them off",
+            )? {
+                println!("Nothing changed.");
+                return Ok(());
+            }
+            turn_off_all(&dependents, false)?;
+        }
+    }
     if ext.included_image().is_none() {
         turned_off(&ext, false);
     }
@@ -870,6 +1138,47 @@ fn activate() -> Result<()> {
         }
         active.push(ext);
     }
+    // Needs an extension that is not in place: left out (until it is).
+    loop {
+        let names: Vec<String> = active.iter().map(|e| e.name.clone()).collect();
+        let Some(pos) = active
+            .iter()
+            .position(|e| e.requires.iter().any(|d| !names.contains(d)))
+        else {
+            break;
+        };
+        let ext = active.remove(pos);
+        let missing: Vec<&String> = ext.requires.iter().filter(|d| !names.contains(d)).collect();
+        println!(
+            "Extension {}: on, but left out: it needs {}, not in place",
+            ext.name,
+            missing
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        unlink(&ext.name);
+        local.retain(|n| n != &ext.name);
+    }
+    // Two that cannot be on together (turned on by hand): the second, by
+    // name, is left out.
+    let names: Vec<String> = active.iter().map(|e| e.name.clone()).collect();
+    let mut out = Vec::new();
+    for (i, ext) in active.iter().enumerate() {
+        if in_conflict(ext, &active[..i], &names)
+            .iter()
+            .any(|c| !out.contains(c))
+        {
+            out.push(ext.name.clone());
+        }
+    }
+    for name in &out {
+        println!("Extension {name}: on, but left out: it cannot be on together with another one");
+        unlink(name);
+        local.retain(|n| n != name);
+    }
+    active.retain(|e| !out.contains(&e.name));
     if active.is_empty() {
         return Ok(());
     }
@@ -1159,6 +1468,51 @@ mod tests {
         assert!(!is_on(&ext("flatpak", true), &choices));
         assert!(is_on(&ext("printing", true), &choices));
         assert!(!is_on(&ext("rocm", false), &choices));
+    }
+
+    #[test]
+    fn dependencies() {
+        let ext = |name: &str, requires: &[&str], conflicts: &[&str]| Extension {
+            name: name.into(),
+            requires: requires.iter().map(|s| s.to_string()).collect(),
+            conflicts: conflicts.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        };
+        let all = vec![
+            ext("cuda", &["nvidia"], &[]),
+            ext("nvidia", &[], &[]),
+            ext("ml", &["cuda", "python"], &[]),
+            ext("python", &[], &[]),
+            ext("rocm", &[], &["rocm-sdk"]),
+            ext("rocm-sdk", &[], &[]),
+            ext("loop-a", &["loop-b"], &[]),
+            ext("loop-b", &["loop-a"], &[]),
+        ];
+        let lookup = |n: &str| all.iter().find(|e| e.name == n).map(|e| e.requires.clone());
+        // What it needs first, each once.
+        assert_eq!(needed("ml", &lookup), vec!["nvidia", "cuda", "python"]);
+        assert_eq!(needed("nvidia", &lookup), Vec::<String>::new());
+        assert_eq!(needed("loop-a", &lookup), vec!["loop-b"]);
+        // Who needs it, among those on, the furthest first.
+        let on: Vec<String> = ["nvidia", "cuda", "ml", "python"]
+            .map(String::from)
+            .to_vec();
+        assert_eq!(needing("nvidia", &all, &on), vec!["ml", "cuda"]);
+        assert_eq!(needing("python", &all, &on), vec!["ml"]);
+        assert!(needing("ml", &all, &on).is_empty());
+        // Conflicts, named on either side.
+        let on = vec!["rocm-sdk".to_string()];
+        assert_eq!(in_conflict(&all[4], &all, &on), vec!["rocm-sdk"]);
+        let on = vec!["rocm".to_string()];
+        assert_eq!(in_conflict(&all[5], &all, &on), vec!["rocm"]);
+        // Read from a manifest and written back the same.
+        let parsed = parse("ml", "Requires=\"cuda python\"\nConflicts=rocm\n");
+        assert_eq!(parsed.requires, vec!["cuda", "python"]);
+        assert_eq!(parsed.conflicts, vec!["rocm"]);
+        let again = parse("ml", &manifest_text(&parsed));
+        assert_eq!(again.requires, parsed.requires);
+        assert_eq!(again.conflicts, parsed.conflicts);
+        assert_eq!(relations(&parsed), "; needs: cuda, python; not with: rocm");
     }
 
     #[test]

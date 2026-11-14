@@ -111,20 +111,25 @@ Commands:
   extensions enable <name>
                          Turn an extension on (an optional one is downloaded
                          first), at once (one with kernel modules: from the
-                         next restart).
+                         next restart). Offers to turn on the extensions it
+                         needs, and to turn off those it cannot be on with.
       --from <source>    Download it from <source> instead of the registry
                          (a directory, an http(s) URL, or oci://...).
       --keyring <file>   Also accept the keys in <file>.
+      --yes              Do not ask (turn on what it needs, off what it
+                         cannot be on with).
       --no-apply         Only from the next restart.
   extensions disable <name> [--yes] [--no-apply]
                          Turn an extension off, at once (with --no-apply, or
                          one with kernel modules: from the next restart). A
-                         special one asks first.
+                         special one asks first; so does one that others
+                         need (they are turned off too).
   extensions install <file> [--yes] [--no-apply]
                          Install an extension image from a file (not signed,
                          not verified: asks first) and turn it on.
-  extensions remove <name>
-                         Turn an optional extension off and delete it.
+  extensions remove <name> [--yes]
+                         Turn an optional extension off and delete it (and
+                         turn off those that need it, after asking).
   ssh-server [on|off]    Show, or turn on or off, the SSH server (and open or
                          close its port, 22/tcp, in the firewall).
   packages [<name>]      List the packages of this version (and their

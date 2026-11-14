@@ -86,6 +86,14 @@ the same way. One directory per extension in `extensions/<name>/`:
       `Setup=` runs again;
     - `Boot=`, a script run at every boot with it on (and when it is
       turned on);
+  - dependencies:
+    - `Requires=`, extensions it needs (one or more): turning it on asks
+      to turn them on too (downloading them); turning one of them off, or
+      removing it, asks and turns this one off too. At boot, an extension
+      whose requirements are not all in place is left out, with a message.
+      `xctl extensions list` shows them ("needs: ...");
+    - `Conflicts=`, extensions that cannot be on together with it (named
+      on either side): turning it on asks to turn them off;
   - `Live=no` for an extension that brings kernel modules: turning it on
     or off waits for the next restart.
 

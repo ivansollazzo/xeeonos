@@ -19,18 +19,40 @@ The live ISO's UKI is signed too.
 
 ## Enrolling the keys
 
-A new computer trusts only Microsoft's keys, so the XeeonOS keys have to be
-enrolled once:
+A new computer trusts only Microsoft's keys: it does not start the XeeonOS
+ISO (signed with the XeeonOS key) while it has them. So, **before
+installing**:
 
-1. In the firmware settings (often F2 or Del at power on), find Secure Boot
-   and choose **Reset to Setup Mode**, or **Clear all Secure Boot keys**.
-   Leave Secure Boot itself on if the firmware allows it.
-2. Start XeeonOS and open the boot menu by holding Space while it starts.
-   Choose **Enroll Secure Boot keys: auto**. systemd-boot warns, waits 15
-   seconds (any key stops it), enrolls and restarts.
-3. Secure Boot is now on. `xctl status` shows `Secure Boot: on`.
+1. In the firmware settings (often F1, F2 or Del at power on; on a ThinkPad
+   F1, Security → Secure Boot), choose **Reset to Setup Mode**, or **Clear
+   all Secure Boot keys**. Leave Secure Boot itself on. "Platform Mode"
+   shows "Setup Mode"; the firmware's main page shows Secure Boot as off,
+   because without keys nothing is checked yet.
+2. Start the ISO and install XeeonOS (`xctl install-system`).
+3. At the first start from the disk, systemd-boot enrolls the XeeonOS keys
+   by itself: the installer writes `secure-boot-enroll force` into
+   `loader/loader.conf` on the boot partition. A warning counts down 15
+   seconds (any key stops it), the keys go in and the computer restarts.
+   The firmware leaves Setup Mode ("User Mode"): from then on it starts only
+   what is signed with the XeeonOS key or Microsoft's.
+4. Secure Boot is on: `xctl status` shows `Secure Boot: on`.
 
-In a virtual machine, systemd-boot does this by itself at the first start.
+If the firmware was not in Setup Mode, nothing happens at step 3 and
+XeeonOS starts without Secure Boot; `xctl status` says what to do. Put the
+firmware in Setup Mode (step 1) and restart: the keys go in then. (The boot
+menu's "Enroll Secure Boot keys: auto" does the same, but some firmware,
+e.g. on ThinkPads, never shows the boot menu.)
+
+On a system installed before the installer did this, add the line by hand
+and restart: `echo "secure-boot-enroll force" | sudo tee -a "$(bootctl
+-p)"/loader/loader.conf`.
+
+A computer whose firmware stays with Microsoft's keys only cannot start
+XeeonOS with Secure Boot on: that would need a boot loader signed by
+Microsoft (shim), which XeeonOS does not have yet.
+
+In a virtual machine, systemd-boot enrolls the keys by itself at the first
+start in any case.
 
 The keys are in `loader/keys/auto/` on the boot partition (PK, KEK, db), and
 in `/usr/share/xeeonos/secureboot/`:
@@ -52,7 +74,7 @@ Ubuntu's OVMF firmware package.
 | `Secure Boot:` | Meaning |
 |---|---|
 | `on` | On, with the XeeonOS keys |
-| `off; the firmware is ready for the XeeonOS keys ...` | Setup Mode: step 2 |
+| `off; the firmware is ready for the XeeonOS keys ...` | Setup Mode: restart (step 3) |
 | `off (see docs/secure-boot.md ...)` | Off: step 1 |
 | `off (this build is not signed)` | A development build without a key |
 

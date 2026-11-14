@@ -1,6 +1,6 @@
-name: Nuovo snapshot
+name: Update Arch snapshot
 
-# On request (Actions > Nuovo snapshot > Run workflow), a pull request that
+# On request (Actions > Update Arch snapshot > Run workflow), a pull request that
 # moves the testing branch to another snapshot of the
 # Arch Linux Archive (Snapshot= in mkosi.conf): new kernel, libraries and
 # security fixes, while every build stays reproducible. The pull request is
@@ -43,6 +43,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.branch }}
+          persist-credentials: false
 
       - name: Pick the snapshot
         env:

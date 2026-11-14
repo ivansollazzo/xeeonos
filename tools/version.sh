@@ -1,3 +1,4 @@
+
 #!/usr/bin/env bash
 # Print the full XeeonOS version for this build (docs/updates.md).
 #
@@ -5,10 +6,8 @@
 # is the channel and the registry tag:
 #
 #   testing      -> 26.11-testing.57        (every merge publishes one)
-#   stable       -> 26.11.2                 only from the "Pubblica versione"
-#                   workflow (release.yml), which sets XEEONOS_VERSION; a
-#                   merge into stable builds and tests 26.11-rc.<n>, which is
-#                   not published
+#   stable       -> 26.11.2                 only from the stable promotion
+#                   workflow (release.yml), which sets XEEONOS_VERSION
 #   anything     -> 26.11-dev.0             (pull requests, local builds)
 #
 # The number at the end is the CI run number: every build is unique and
@@ -30,17 +29,14 @@ if [[ -n $release ]]; then
         echo "XEEONOS_VERSION ($release) is not YY.MM.S" >&2
         exit 1
     fi
-    if [[ $branch != stable ]]; then
-        echo "a release version ($release) is built only from the stable branch, not $branch" >&2
-        exit 1
-    fi
+    stage=release
+else
+    case $branch in
+        testing) stage=testing ;;
+        stable) stage=rc ;;
+        *) stage=dev ;;
+    esac
 fi
-
-case $branch in
-    testing) stage=$branch ;;
-    stable) stage=${release:+release} ; stage=${stage:-rc} ;;
-    *) stage=dev ;;
-esac
 
 if [[ ${1:-} == --channel ]]; then
     case $stage in

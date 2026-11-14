@@ -84,14 +84,17 @@ for app in gnome-software simple-scan; do
     fi
 done
 # The GNOME services and helpers of the module are there (also Users and
-# Online Accounts of Settings: accountsservice, gnome-online-accounts).
+# Online Accounts of Settings: accountsservice, gnome-online-accounts; the
+# data of Contacts and Calendar: evolution-data-server).
 missing=""
 for f in /usr/bin/gnome-disks /usr/lib/fprintd /usr/bin/boltctl \
     /usr/bin/monitor-sensor /usr/lib/gvfsd-mtp /usr/lib/gvfsd-gphoto2 \
     /usr/lib/gvfsd-afc /usr/lib/gvfsd-smb /usr/lib/gvfsd-nfs \
     /usr/lib/bluetooth/obexd /usr/lib/NetworkManager/VPN/nm-openvpn-service.name \
     /usr/bin/xdg-open /usr/bin/glxinfo /usr/bin/vulkaninfo \
-    /usr/lib/accounts-daemon /usr/lib/goa-daemon; do
+    /usr/lib/accounts-daemon /usr/lib/goa-daemon \
+    /usr/lib/evolution-source-registry /usr/lib/evolution-addressbook-factory \
+    /usr/lib/evolution-calendar-factory; do
     test -e "$f" || missing="$missing $f"
 done
 echo "GNOME-missing:${missing:- none}"

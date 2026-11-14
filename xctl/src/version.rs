@@ -1,6 +1,6 @@
 //! XeeonOS versions and channels.
 //!
-//! A version looks like `26.11-experimental.42`, `26.12-testing.7` or
+//! A version looks like `26.12-testing.7` or
 //! `26.12.2` (YY.MM.S, a stable release). The part after the first `-` names
 //! the channel it was built for.
 
@@ -32,19 +32,18 @@ pub fn parse_os_release(text: &str) -> HashMap<String, String> {
 }
 
 /// The channels, which are also the branches and the tags on the registry:
-/// `experimental` (free development), `testing` (what comes next: new
-/// features, new Arch snapshots) and `stable` (fixed versions, published by
-/// hand).
-pub const CHANNELS: [&str; 3] = ["stable", "testing", "experimental"];
+/// `testing` (what comes next: new features, new Arch snapshots) and
+/// `stable` (fixed versions, published by hand).
+pub const CHANNELS: [&str; 2] = ["stable", "testing"];
 
 /// The channel a version belongs to (its tag on the registry):
 ///
 /// | version                  | channel        |
 /// |--------------------------|----------------|
-/// | `26.11-experimental.42`  | `experimental` |
 /// | `26.12-testing.7`        | `testing`      |
 /// | `26.12.2`                | `stable`       |
 /// | `26.11-dev.8`, `-rc.3`   | none           |
+/// | `26.11-experimental.42`  | none (retired) |
 ///
 /// `Option<String>` is Rust's way of saying "maybe a value": `Some(..)` or
 /// `None`. Builds that are not published have no channel.
@@ -60,7 +59,7 @@ pub fn channel_of(version: &str) -> Option<String> {
     match rest.map(|r| r.split('.').next().unwrap_or_default()) {
         // YY.MM.S
         None if parts.len() == 3 => Some("stable".to_string()),
-        Some(stage @ ("experimental" | "testing")) if parts.len() == 2 => Some(stage.to_string()),
+        Some("testing") if parts.len() == 2 => Some("testing".to_string()),
         _ => None,
     }
 }
@@ -145,10 +144,7 @@ mod tests {
 
     #[test]
     fn channels() {
-        assert_eq!(
-            channel_of("26.11-experimental.42").as_deref(),
-            Some("experimental")
-        );
+        assert_eq!(channel_of("26.11-experimental.42"), None);
         assert_eq!(channel_of("26.12-testing.7").as_deref(), Some("testing"));
         assert_eq!(channel_of("26.12.2").as_deref(), Some("stable"));
         assert_eq!(channel_of("27.1.1").as_deref(), Some("stable"));
@@ -161,10 +157,17 @@ mod tests {
 
     #[test]
     fn valid_channels() {
-        for ok in ["experimental", "testing", "stable"] {
+        for ok in ["testing", "stable"] {
             assert!(is_valid_channel(ok), "{ok}");
         }
-        for bad in ["", "beta", "1.0-stable", "stable/../", "Stable"] {
+        for bad in [
+            "",
+            "experimental",
+            "beta",
+            "1.0-stable",
+            "stable/../",
+            "Stable",
+        ] {
             assert!(!is_valid_channel(bad), "{bad}");
         }
     }

@@ -26,8 +26,9 @@ dei moduli, `extensions.md` delle estensioni.
 
 ## Il lavoro di ogni giorno
 
-1. Un ramo per ogni modifica, partendo da `experimental`.
-2. Una pull request verso `experimental`. La CI (`.github/workflows/build.yml`)
+1. Un ramo per ogni modifica, partendo da `testing`.
+2. Una pull request verso `testing` (per una correzione già uscita su stable,
+   poi un backport verso `stable`). La CI (`.github/workflows/build.yml`)
    costruisce tutto e lancia un test per funzione (`tools/ci/<nome>.sh`), in
    parallelo: circa un'ora e mezza.
 3. Se un test fallisce: apri il job, leggi la fine del log (la console della
@@ -43,8 +44,8 @@ dei moduli, `extensions.md` delle estensioni.
    - Un test che fallisce per caso: "Re-run failed jobs", una volta sola.
 4. Tutto verde: "Ready for review" → "Merge pull request" → "Confirm merge" →
    "Delete branch".
-5. Dopo il merge, la CI di `experimental` (o di `testing`) pubblica la nuova versione su
-   `ghcr.io/ivansollazzo/xeeonos:experimental`, firmata.
+5. Dopo il merge, la CI di `testing` pubblica la nuova versione su
+   `ghcr.io/ivansollazzo/xeeonos:testing`, firmata.
 
 Un test nuovo: uno script in `tools/ci/`, una riga nella matrice di
 `build.yml`, una riga in `tools/ci/README.md`, e dopo il merge il suo nome
@@ -58,7 +59,7 @@ Per provare a mano un'immagine: scarica l'artifact `disk-image` o
 
 Lo snapshot lo scegli tu, niente lo sposta da solo: Actions → **Nuovo
 snapshot** → "Run workflow". Scegli il ramo (`testing`, dove vanno i nuovi
-snapshot; per ora `experimental`) e la data (`AAAA/MM/GG`, oppure vuota per
+snapshot) e la data (`AAAA/MM/GG`, oppure vuota per
 il più recente). Si apre (o si aggiorna) la pull request "Arch snapshot
 <data>", con le notizie di Arch e i pacchetti che cambiano. Se è in bozza,
 leggi le notizie prima. Se la CI è verde, uniscila; se lo snapshot non ti
@@ -78,16 +79,15 @@ Le versioni seguono il mese (`AA.MM`: 26.11, a gennaio 27.1). Ramo = canale
 
 | Ramo | Cosa | Versioni |
 |---|---|---|
-| `experimental` | sperimentazione libera; ogni merge pubblica | `26.11-experimental.42` |
 | `testing` | quello che verrà: novità, nuovi snapshot; ogni merge pubblica | `26.12-testing.7` |
 | `stable` | versioni fisse; solo backport da testing | `26.12.1`, `26.12.2` |
 
-`testing` e `stable` partono dopo la fase sperimentale:
+`testing` è il ramo principale. Quando vuoi aprire `stable`:
 
-1. Su GitHub, nel menu dei rami, scrivi `testing` e scegli "Create branch
-   testing from experimental"; poi lo stesso per `stable` (da `testing`).
-2. Aggiungi `testing` e `stable` alla ruleset "Experimental branch
-   protection" (Settings → Rules → Rulesets → Target branches).
+1. Su GitHub, nel menu dei rami, scrivi `stable` e scegli "Create branch
+   stable from testing".
+2. Controlla che `stable` sia tra i rami della ruleset (Settings → Rules →
+   Rulesets → Target branches).
 3. Da lì in poi: le novità vanno in `testing` con una pull request; le
    correzioni anche, e se servono su stable una seconda pull request verso
    `stable` (backport).
@@ -100,8 +100,7 @@ pubblica la versione firmata sul canale `stable` e crea il tag `v26.12.2`.
 Se qualcosa è rosso non esce niente: correggi su `stable` e rilancia. I
 merge su `stable` da soli non pubblicano niente.
 
-Un sistema cambia canale con `sudo xctl channel set testing` (o `stable`,
-`experimental`), poi `sudo xctl update`.
+Un sistema cambia canale con `sudo xctl channel set testing` (o `stable`), poi `sudo xctl update`.
 
 Le estensioni sono compatibili esattamente con una versione: ogni versione
 pubblicata ha le sue (a breve dal repository `xeeonos-extensions`, che a

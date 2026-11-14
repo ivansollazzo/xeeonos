@@ -17,11 +17,11 @@ One directory of files per version, built by CI with `tools/mkupdate.sh`:
 
 ## Where updates come from
 
-Every push to `experimental` or `testing`, and every stable release, publishes its update to the GitHub container
+Every push to `testing`, and every stable release, publishes its update to the GitHub container
 registry as an OCI artifact, readable without login:
 
-    ghcr.io/ivansollazzo/xeeonos:<version>   e.g. 26.11-experimental.42, 26.12.2
-    ghcr.io/ivansollazzo/xeeonos:<channel>   experimental, testing, stable
+    ghcr.io/ivansollazzo/xeeonos:<version>   e.g. 26.12-testing.7, 26.12.2
+    ghcr.io/ivansollazzo/xeeonos:<channel>   testing, stable
 
 Pull requests never publish.
 
@@ -62,11 +62,8 @@ in January):
 
 | Branch / channel | What | Versions |
 |---|---|---|
-| `experimental` | Free development; every merge is published | `26.11-experimental.42` |
 | `testing` | What comes next: new features, new Arch snapshots; every merge is published | `26.12-testing.7` |
 | `stable` | Fixed versions; fixes come as backports from testing | `26.12.1`, `26.12.2`, `27.1.1` |
-
-`testing` and `stable` start after the experimental phase.
 
 **Stable versions are published by hand.** A merge into `stable` is built
 and tested (`26.12-rc.<n>`), never published. Actions → **Pubblica
@@ -81,8 +78,8 @@ versione** → Run workflow (on `stable`), `.github/workflows/release.yml`:
    nothing is published.
 
 **Arch snapshots are chosen by hand.** Actions → **Nuovo snapshot** → Run
-workflow (`.github/workflows/snapshot.yml`): a branch (testing, or
-experimental) and a date (empty: the newest). It opens a pull request with
+workflow (`.github/workflows/snapshot.yml`): the branch (testing)
+and a date (empty: the newest). It opens a pull request with
 the Arch news and the packages that change; merge it when it is green.
 Nothing moves the snapshot by itself.
 

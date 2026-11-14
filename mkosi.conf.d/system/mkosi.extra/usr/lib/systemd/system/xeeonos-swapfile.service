@@ -4,7 +4,7 @@
 # at every boot.
 [Unit]
 Description=Swap file
-Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/maintenance.md
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/testing/docs/maintenance.md
 DefaultDependencies=no
 ConditionPathIsMountPoint=/
 # Only the root file system is needed. Not After=local-fs.target: that

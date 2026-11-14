@@ -2,7 +2,7 @@
 # it is closed; "Restart" in the menu leaves Recovery.
 [Unit]
 Description=XeeonOS Recovery menu
-Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/recovery.md
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/testing/docs/recovery.md
 ConditionKernelCommandLine=xeeonos.recovery
 After=basic.target NetworkManager.service xeeonos-setup.service
 Conflicts=getty@tty1.service

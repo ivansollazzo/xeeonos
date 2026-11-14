@@ -1,15 +1,15 @@
 name: Build
 
 # Branches = channels (tools/version.sh, docs/updates.md):
-# - experimental, testing: every push (merge) is built, tested and published
-#   (26.11-experimental.42, 26.12-testing.7);
+# - testing: every push (merge) is built, tested and published
+#   (26.12-testing.7);
 # - stable: a push is built and tested, never published; a stable version
 #   (YY.MM.S) is published only by the "Pubblica versione" workflow
 #   (release.yml), which calls this one with the version.
 # Pull requests build and test, but never publish anything.
 on:
   push:
-    branches: [experimental, testing, stable]
+    branches: [testing, stable]
   pull_request:
   workflow_dispatch:
   workflow_call:

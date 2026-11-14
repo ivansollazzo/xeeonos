@@ -7,7 +7,7 @@
 # (see docs/setup.md). Booting with systemd.firstboot=no skips it (tests).
 [Unit]
 Description=XeeonOS first-boot setup
-Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/setup.md
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/testing/docs/setup.md
 ConditionPathExists=!/var/lib/xeeonos/setup-done
 ConditionKernelCommandLine=!systemd.firstboot=no
 Wants=NetworkManager.service first-boot-complete.target

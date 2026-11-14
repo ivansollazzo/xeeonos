@@ -1,0 +1,44 @@
+name: Pulizia experimental
+
+# On request (Actions > Pulizia experimental > Run workflow): delete from
+# ghcr.io the versions of this repository's package published for the old
+# experimental channel (every version with a tag containing "experimental").
+# Versions of testing and stable, and untagged ones, are never touched. With "dry run" it only lists them.
+#
+# The workflow's own token can delete them because this repository's
+# workflows published the package (it has admin access to it).
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only list what would be deleted
+        type: boolean
+        default: true
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    name: Delete experimental versions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          PACKAGE: ${{ github.event.repository.name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          base="users/$OWNER/packages/container/$PACKAGE/versions"
+          gh api --paginate "$base?per_page=100" --jq \
+            '.[] | select(.metadata.container.tags | any(test("experimental")))
+                 | [.id, (.metadata.container.tags | join(",")), .created_at] | @tsv' > doomed.tsv
+          echo "$(wc -l < doomed.tsv) versions to delete:"
+          cat doomed.tsv
+          [[ $DRY_RUN == true ]] && exit 0
+          while IFS=$'\t' read -r id _; do
+            gh api -X DELETE "$base/$id"
+          done < doomed.tsv
+          echo done

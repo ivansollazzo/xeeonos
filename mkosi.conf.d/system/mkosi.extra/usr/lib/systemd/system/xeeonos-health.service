@@ -2,7 +2,7 @@
 # noted for `xctl status` and the login message (docs/maintenance.md).
 [Unit]
 Description=Check the health of the disk
-Documentation=https://github.com/ivansollazzo/xeeonos/blob/experimental/docs/maintenance.md
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/testing/docs/maintenance.md
 ConditionPathIsMountPoint=/
 
 [Service]

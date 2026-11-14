@@ -51,7 +51,7 @@ pub fn describe() -> String {
     match (state(), signed) {
         (State::On, _) => "on".into(),
         (State::Setup, true) => "off; the firmware is ready for the XeeonOS keys: \
-                                 restart and choose \"Enroll Secure Boot keys: auto\" in the boot menu"
+                                 restart, they are enrolled at the start (see docs/secure-boot.md)"
             .into(),
         (_, true) => "off (see docs/secure-boot.md to turn it on)".into(),
         (_, false) => "off (this build is not signed)".into(),

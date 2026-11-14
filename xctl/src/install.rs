@@ -606,8 +606,11 @@ fn install_boot(esp: &Path, boot: Option<&Path>, p: &Payload) -> Result<()> {
 /// /usr (`usr`, mounted), systemd-boot signed with the same key and the keys
 /// to enroll. Put them on the boot partition: the signed systemd-boot in
 /// place of the copies bootctl installed, and the keys in loader/keys/auto,
-/// where systemd-boot finds them when the firmware is in Setup Mode.
-/// (An unsigned version has neither: nothing changes.)
+/// where systemd-boot finds them when the firmware is in Setup Mode; and
+/// tell it to enroll them by itself at the first start
+/// (`secure-boot-enroll force`): with the firmware in Setup Mode the keys
+/// go in and Secure Boot is on, with no menu to find; otherwise nothing
+/// happens. (An unsigned version has neither: nothing changes.)
 fn install_secure_boot(esp: &Path, usr: &Path) -> Result<()> {
     let signed = usr.join("lib/systemd/boot/efi/systemd-bootx64.efi.signed");
     let keys = usr.join("share/xeeonos/secureboot");
@@ -635,7 +638,23 @@ fn install_secure_boot(esp: &Path, usr: &Path) -> Result<()> {
         fs::copy(keys.join(name), auto.join(name))?;
     }
     fs::File::open(&auto)?.sync_all()?;
+    let conf = esp.join("loader/loader.conf");
+    let old = fs::read_to_string(&conf).unwrap_or_default();
+    fs::write(&conf, with_enroll_force(&old))?;
+    fs::File::open(&conf)?.sync_all()?;
     Ok(())
+}
+
+/// loader.conf with `secure-boot-enroll force` (replacing any other
+/// secure-boot-enroll setting, keeping the rest).
+fn with_enroll_force(conf: &str) -> String {
+    let mut out: String = conf
+        .lines()
+        .filter(|l| l.split_whitespace().next() != Some("secure-boot-enroll"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    out.push_str("secure-boot-enroll force\n");
+    out
 }
 
 /// Disks that XeeonOS can be installed on: whole, writable disks, except the
@@ -1081,6 +1100,15 @@ impl Drop for Mount {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enroll_force() {
+        assert_eq!(with_enroll_force(""), "secure-boot-enroll force\n");
+        assert_eq!(
+            with_enroll_force("#timeout 3\nsecure-boot-enroll manual\neditor no"),
+            "#timeout 3\neditor no\nsecure-boot-enroll force\n"
+        );
+    }
 
     #[test]
     fn installed_files() {

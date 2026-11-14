@@ -2,8 +2,8 @@
 name: Publish new stable
 
 # Promote testing to stable:
-# calculate the next stable version, merge testing into stable
-# and let build.yml build, test and publish the new stable version.
+# calculate the next stable version, merge testing into stable,
+# then build, test and publish the exact merge commit.
 
 on:
   workflow_dispatch:
@@ -11,12 +11,19 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: stable-promotion
+  cancel-in-progress: false
+
 jobs:
   promote:
     name: Promote testing to stable
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+    outputs:
+      version: ${{ steps.number.outputs.version }}
+      merge_sha: ${{ steps.merge.outputs.merge_sha }}
 
     steps:
       - name: Only from testing
@@ -51,12 +58,17 @@ jobs:
           echo "Stable version: $version" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Merge testing into stable
+        id: merge
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git checkout -B stable origin/stable
           git merge --no-ff --no-edit origin/testing
+
+          merge_sha=$(git rev-parse HEAD)
+          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+          echo "Promoted commit: $merge_sha" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Push stable
         env:
@@ -70,4 +82,18 @@ jobs:
           git remote set-url origin \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          git push origin HEAD:stable
+          git push origin HEAD:refs/heads/stable
+
+  build:
+    name: Build, test and publish stable
+    needs: promote
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.promote.outputs.version }}
+      ref: ${{ needs.promote.outputs.merge_sha }}
+    secrets: inherit
+    permissions:
+      contents: write
+      actions: read
+      packages: write
+      pull-requests: read

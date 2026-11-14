@@ -696,7 +696,11 @@ fn enable(args: &[String]) -> Result<()> {
         println!("Extension {d}: {state}.");
     }
     set_choice(&name, true)?;
-    let state = turned_on(&ext, &version, no_apply)?;
+    // What it needs comes only at the next restart (kernel modules): so
+    // does it.
+    let active = active_now();
+    let wait = no_apply || needed(&name, &lookup).iter().any(|d| !active.contains(d));
+    let state = turned_on(&ext, &version, wait)?;
     println!("Extension {name}: {state}.");
     Ok(())
 }

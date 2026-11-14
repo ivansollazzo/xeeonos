@@ -7,7 +7,7 @@ no NVIDIA proprietary driver.
 
 | Area | Packages |
 | --- | --- |
-| File systems | `dosfstools` (FAT), `exfatprogs` (exFAT), `ntfs-3g` (NTFS: check and repair Windows disks), `e2fsprogs` (ext4) |
+| File systems | `dosfstools` (FAT), `exfatprogs` (exFAT), `ntfsprogs` (NTFS: check, repair and format Windows disks), `e2fsprogs` (ext4) |
 | Processor | `intel-ucode`, `amd-ucode` (microcode, loaded early) |
 | Graphics, Wi-Fi, Bluetooth | `linux-firmware-intel`, `-amdgpu`, `-radeon`, `-nvidia` (Nouveau), `-realtek`, `-atheros`, `-mediatek`, `-broadcom` |
 | Laptop sound | `sof-firmware`, `alsa-ucm-conf` (recent Intel and AMD laptops), `linux-firmware-cirrus` (speaker amplifiers) |

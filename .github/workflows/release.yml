@@ -1,13 +1,10 @@
-name: Pubblica versione
 
-# A stable version, by hand: Actions > Pubblica versione > Run workflow, on
-# the branch stable. It works out the number (YY.MM.S: the month of today,
-# S one more than the last version of this month: 26.12.1, 26.12.2, then
-# 27.1.1 in January), builds and tests everything (build.yml) and, only if
-# every test is green, publishes the signed update on the stable channel and
-# the GitHub release vYY.MM.S with the ISO, marked "Latest" (which also tags
-# the commit vYY.MM.S). If anything is red, nothing is published and no tag
-# is made: fix it on stable and run this again.
+name: Publish new stable
+
+# Promote testing to stable:
+# calculate the next stable version, merge testing into stable
+# and let build.yml build, test and publish the new stable version.
+
 on:
   workflow_dispatch:
 
@@ -15,41 +12,62 @@ permissions:
   contents: read
 
 jobs:
-  number:
-    name: Version number
+  promote:
+    name: Promote testing to stable
     runs-on: ubuntu-24.04
-    outputs:
-      version: ${{ steps.number.outputs.version }}
+    permissions:
+      contents: read
+
     steps:
-      - name: Only from stable
-        if: github.ref_name != 'stable'
+      - name: Only from testing
+        if: github.ref_name != 'testing'
         run: |
-          echo "::error::Run it on the branch stable (now: ${{ github.ref_name }})"
+          echo "::error::Run it on the testing branch (now: ${{ github.ref_name }})"
           exit 1
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: testing
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
+
+      - name: Fetch branches
+        run: git fetch origin testing stable --tags
 
       - name: Next YY.MM.S
         id: number
         run: |
           month=$(date -u +%y.%-m)
-          last=$(git tag --list "v$month.*" | sed "s/^v$month\.//" | grep -E '^[0-9]+$' | sort -n | tail -n1)
-          version=$month.$(( ${last:-0} + 1 ))
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Version $version" >> "$GITHUB_STEP_SUMMARY"
+          last=$(git tag --merged origin/stable --list "v$month.*" |
+            sed "s/^v$month\\.//" |
+            grep -E '^[0-9]+$' |
+            sort -n |
+            tail -n1)
 
-  build:
-    name: Build, test, publish
-    needs: number
-    uses: ./.github/workflows/build.yml
-    with:
-      version: ${{ needs.number.outputs.version }}
-    secrets: inherit
-    permissions:
-      contents: write # the GitHub release with the ISO (and its tag)
-      actions: read
-      packages: write
-      pull-requests: read
+          version=$month.$(( ${last:-0} + 1 ))
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Stable version: $version" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Merge testing into stable
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B stable origin/stable
+          git merge --no-ff --no-edit origin/testing
+
+      - name: Push stable
+        env:
+          GH_TOKEN: ${{ secrets.XEEONOS_BOT_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::error::XEEONOS_BOT_TOKEN is not configured"
+            exit 1
+          fi
+
+          git remote set-url origin \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          git push origin HEAD:stable

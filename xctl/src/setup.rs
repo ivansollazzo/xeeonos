@@ -11,7 +11,7 @@
 //!
 //! Unattended setup: the answers can be given as a file of `key=value` lines
 //! (keys: language, keyboard, timezone, hostname, user, fullname, password,
-//! admin, encrypt, disk_password), passed as the system credential
+//! admin, encrypt, disk_password, apps), passed as the system credential
 //! `xeeonos.setup`.
 
 use std::collections::HashMap;
@@ -60,6 +60,8 @@ struct Answers {
     admin: bool,
     /// Turn the disk password on, with this password.
     disk_password: Option<String>,
+    /// Install the desktop's default applications from Flathub.
+    apps: bool,
 }
 
 pub fn run_setup(args: &[String]) -> Result<()> {
@@ -132,6 +134,7 @@ fn from_credential(text: &str) -> Result<Answers> {
             ),
             _ => None,
         },
+        apps: map.get("apps").is_none_or(|v| *v == "yes"),
         language,
     };
     check_language(&answers.language)?;
@@ -172,20 +175,27 @@ fn ask_all() -> Result<Answers> {
         password: String::new(),
         admin: true,
         disk_password: None,
+        apps: true,
     };
     let encrypt = crate::boot::esp().join(ENCRYPT_FLAG).exists();
+    let apps = !crate::apps::defaults().is_empty();
     let mut step: usize = 0;
+    // Going back: a step that is skipped passes the user on backwards too.
+    let mut back = false;
     loop {
         let forward = match step {
             0 => ask_language(&mut a)?,
             1 => ask_keyboard(&mut a)?,
             2 => ask_timezone(&mut a)?,
             3 => crate::network::screen()?,
-            4 => ask_hostname(&mut a)?,
-            5 => ask_account(&mut a)?,
-            6 if encrypt => ask_disk_password(&mut a)?,
+            4 if apps => ask_apps(&mut a)?,
+            4 => !back,
+            5 => ask_hostname(&mut a)?,
+            6 => ask_account(&mut a)?,
+            7 if encrypt => ask_disk_password(&mut a)?,
             _ => return Ok(a),
         };
+        back = !forward;
         if forward {
             step += 1;
         } else {
@@ -303,6 +313,21 @@ fn ask_timezone(a: &mut Answers) -> Result<bool> {
         apply_timezone(&a.timezone)?;
         return Ok(true);
     }
+}
+
+/// The desktop's default applications, from Flathub (crate::apps).
+fn ask_apps(a: &mut Answers) -> Result<bool> {
+    a.apps = ui::yes_no(
+        "Applications",
+        "Install the default applications from Flathub?\n\n\
+         Web browser, mail, text editor, image and document viewers, \
+         calculator, videos, camera, calendar, contacts and a few more.\n\n\
+         They are downloaded in the background as soon as there is a network \
+         connection. Any of them can be removed later, and others added, \
+         with Software.",
+        false,
+    )?;
+    Ok(true)
 }
 
 fn ask_hostname(a: &mut Answers) -> Result<bool> {
@@ -505,6 +530,9 @@ fn apply(a: &Answers) -> Result<()> {
     }
     // The same keyboard layout for the graphical desktop, if there is one.
     apply_graphical_keyboard(&a.keyboard)?;
+    if !a.apps {
+        crate::apps::turn_off()?;
+    }
 
     println!(
         "XeeonOS setup: created user {}{}",

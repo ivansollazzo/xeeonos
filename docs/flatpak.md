@@ -23,7 +23,43 @@ it: they come from [Flathub](https://flathub.org/) as Flatpak applications.
   flatpak uninstall <application>
   ```
 
-No application is preinstalled for now.
+## Default applications
+
+The desktop brings a list of applications to install from Flathub
+(`/usr/share/flatpak/preinstall.d/`, format
+[flatpak-preinstall(1)](https://man.archlinux.org/man/flatpak-preinstall.1)).
+With GNOME (`mkosi.profiles/gnome`):
+
+| Application | Flathub ID |
+| --- | --- |
+| Firefox (web) | `org.mozilla.firefox` |
+| Convey (mail) | `net.donnybeelo.Convey` |
+| Text Editor | `org.gnome.TextEditor` |
+| Image Viewer (Loupe) | `org.gnome.Loupe` |
+| Document Viewer (Papers) | `org.gnome.Papers` |
+| Calculator | `org.gnome.Calculator` |
+| Video Player (Showtime) | `org.gnome.Showtime` |
+| Camera (Snapshot) | `org.gnome.Snapshot` |
+| Calendar | `org.gnome.Calendar` |
+| Contacts | `org.gnome.Contacts` |
+| Disk Usage Analyzer | `org.gnome.baobab` |
+| Characters | `org.gnome.Characters` |
+| Fonts | `org.gnome.font-viewer` |
+| Extension Manager | `com.mattjakeman.ExtensionManager` |
+| Flatseal (permissions) | `com.github.tchx84.Flatseal` |
+
+- The first-boot setup asks whether to install them (default: yes).
+- They are downloaded **in the background, as soon as there is a network**:
+  `xeeonos-flatpak-preinstall.timer` tries at boot and every 15 minutes
+  (`/usr/lib/xeeonos/flatpak-preinstall`, `flatpak preinstall`). Without
+  a network nothing happens and it tries again later; an interrupted
+  download continues.
+- Once installed, it stops. An update whose list adds applications installs
+  those. An application the user removes is **never installed again**
+  (Flatpak remembers it).
+- `xctl status` shows how far they are (`Apps:`).
+- An administrator can add a list of their own in
+  `/etc/flatpak/preinstall.d/`.
 
 ## How Flathub is set up
 
@@ -35,4 +71,6 @@ system remote.
 
 `tools/ci/flatpak.sh`: Flathub is there for the system and for the user
 created by the setup, installed applications would appear in the menus, and
-GNOME Software has its Flatpak support.
+GNOME Software has its Flatpak support; the GNOME list has its 15
+applications, the service is enabled, the setup's "no" is kept and shown by
+`xctl status` (nothing is downloaded in CI).

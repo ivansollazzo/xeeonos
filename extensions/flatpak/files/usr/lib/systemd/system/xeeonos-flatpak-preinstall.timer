@@ -1,0 +1,9 @@
+[Unit]
+Description=Install the default applications from Flathub, when there is a network
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=15min
+
+[Install]
+WantedBy=timers.target

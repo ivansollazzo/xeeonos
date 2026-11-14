@@ -1,0 +1,65 @@
+# The default applications of the GNOME desktop, from Flathub (format:
+# flatpak-preinstall(1)). Installed in the background once there is a
+# network, by the extension flatpak (xeeonos-flatpak-preinstall), unless
+# the first-boot setup was told not to. One the user removes is never
+# installed again.
+
+# Firefox: web browser
+[Flatpak Preinstall org.mozilla.firefox]
+Branch=stable
+
+# Convey: mail
+[Flatpak Preinstall net.donnybeelo.Convey]
+Branch=stable
+
+# Text Editor
+[Flatpak Preinstall org.gnome.TextEditor]
+Branch=stable
+
+# Image Viewer
+[Flatpak Preinstall org.gnome.Loupe]
+Branch=stable
+
+# Document Viewer (PDF and more)
+[Flatpak Preinstall org.gnome.Papers]
+Branch=stable
+
+# Calculator
+[Flatpak Preinstall org.gnome.Calculator]
+Branch=stable
+
+# Video Player
+[Flatpak Preinstall org.gnome.Showtime]
+Branch=stable
+
+# Camera
+[Flatpak Preinstall org.gnome.Snapshot]
+Branch=stable
+
+# Calendar
+[Flatpak Preinstall org.gnome.Calendar]
+Branch=stable
+
+# Contacts
+[Flatpak Preinstall org.gnome.Contacts]
+Branch=stable
+
+# Disk Usage Analyzer
+[Flatpak Preinstall org.gnome.baobab]
+Branch=stable
+
+# Characters: symbols and emoji
+[Flatpak Preinstall org.gnome.Characters]
+Branch=stable
+
+# Fonts
+[Flatpak Preinstall org.gnome.font-viewer]
+Branch=stable
+
+# Extension Manager: GNOME Shell extensions
+[Flatpak Preinstall com.mattjakeman.ExtensionManager]
+Branch=stable
+
+# Flatseal: permissions of Flatpak applications
+[Flatpak Preinstall com.github.tchx84.Flatseal]
+Branch=stable

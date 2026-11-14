@@ -4,6 +4,7 @@
 //! `ext`, `install-system`, `recovery`, `network`, `encryption`, `firewall`, `snapshots`,
 //! `report`. Each command lives in its own module (file) below.
 
+mod apps;
 mod boot;
 mod channel;
 mod encryption;

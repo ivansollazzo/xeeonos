@@ -1,0 +1,11 @@
+[Unit]
+Description=Install the default applications from Flathub
+After=network-online.target xeeonos-setup.service
+ConditionPathExists=!/var/lib/xeeonos/flatpak-preinstall-off
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/xeeonos/flatpak-preinstall
+# In the background: the desktop stays responsive while they download.
+Nice=10
+IOSchedulingClass=idle

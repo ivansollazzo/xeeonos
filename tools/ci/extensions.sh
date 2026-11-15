@@ -50,6 +50,9 @@ cat /var/lib/ci-hello/setup | sed s,^,SETUP-,
 cat /run/ci-hello-boot | sed s,^,BOOT-,
 systemctl is-enabled systemd-tmpfiles-clean.timer | sed s,^,MASK-,
 xctl extensions list --offline | sed s,^,AFTER-,
+xctl extensions list --installed | grep -q 'Available for' || echo INSTALLED-ONLY
+xctl extensions search hello --installed | sed s,^,SEARCH-,
+xctl update --extensions --check --from http://10.0.2.2:8080 --keyring /run/credentials/@system/xctl.keyring | sed s,^,EXTUPD-,
 xctl extensions disable flatpak --yes
 command -v flatpak >/dev/null || echo FLATPAK-gone
 " --http "$system" --credential "xctl.keyring=$RUNNER_TEMP/test-keyring.gpg" \
@@ -57,7 +60,7 @@ command -v flatpak >/dev/null || echo FLATPAK-gone
     --expect "printing +on +.*\(included, special\)" \
     --expect "scanner +on +.*\(included, special\)" \
     --expect "NOT-KNOWN-ci-hello" \
-    --expect "REMOTE-Can be downloaded for XeeonOS" \
+    --expect "REMOTE-Available for XeeonOS" \
     --expect "REMOTE- +ci-hello +Test extension of the CI.*\(optional\)" \
     --expect "ASK-.*special extension and there is no terminal" \
     --expect "Signature: valid" \
@@ -67,6 +70,9 @@ command -v flatpak >/dev/null || echo FLATPAK-gone
     --expect "BOOT-ci-hello" \
     --expect "MASK-masked-runtime" \
     --expect "AFTER- +ci-hello +on +.*\(optional\)" \
+    --expect "INSTALLED-ONLY" \
+    --expect "SEARCH- +ci-hello +on +Test extension" \
+    --expect "EXTUPD-Extensions: up to date for XeeonOS" \
     --expect "Warning: flatpak is a special extension" \
     --expect "Extension flatpak: off\." \
     --expect "FLATPAK-gone"

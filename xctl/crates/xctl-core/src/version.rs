@@ -150,6 +150,7 @@ mod tests {
         assert_eq!(channel_of("27.1.1").as_deref(), Some("stable"));
         assert_eq!(channel_of("26.11-dev.8"), None);
         assert_eq!(channel_of("26.11-rc.3"), None);
+        assert_eq!(channel_of("26.11.3-rc.5"), None);
         assert_eq!(channel_of("26.12"), None);
         assert_eq!(channel_of("26.12.1-testing.3"), None);
         assert_eq!(channel_of("unknown"), None);
@@ -193,6 +194,10 @@ mod tests {
         assert_eq!(compare("1.1.0", "1.1.0-beta.5"), Greater);
         assert_eq!(compare("1.1.0-alpha.9", "1.1.0-beta.1"), Less);
         assert_eq!(compare("1.1.0", "1.1.1-beta.1"), Less);
+        // A pull request to stable builds the next number as -rc.<run>.
+        assert_eq!(compare("26.11.2", "26.11.3-rc.5"), Less);
+        assert_eq!(compare("26.11.3-rc.5", "26.11.3-rc.5.1"), Less);
+        assert_eq!(compare("26.11.3-rc.5", "26.11.3"), Less);
         assert_eq!(compare("2.0.0-beta.3", "1.1.1-beta.1"), Greater);
     }
 

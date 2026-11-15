@@ -95,7 +95,50 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 name = "xctl"
 version = "0.1.0"
 dependencies = [
+ "xctl-core",
+ "xctl-extensions",
+ "xctl-system",
+ "xctl-update",
+]
+
+[[package]]
+name = "xctl-core"
+version = "0.1.0"
+
+[[package]]
+name = "xctl-extensions"
+version = "0.1.0"
+dependencies = [
+ "xctl-core",
+ "xctl-fetch",
+]
+
+[[package]]
+name = "xctl-fetch"
+version = "0.1.0"
+dependencies = [
  "serde_json",
+ "xctl-core",
+]
+
+[[package]]
+name = "xctl-system"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "xctl-core",
+ "xctl-extensions",
+ "xctl-fetch",
+ "xctl-update",
+]
+
+[[package]]
+name = "xctl-update"
+version = "0.1.0"
+dependencies = [
+ "xctl-core",
+ "xctl-extensions",
+ "xctl-fetch",
 ]
 
 [[package]]

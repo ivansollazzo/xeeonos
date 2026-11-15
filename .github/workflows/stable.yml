@@ -1,0 +1,53 @@
+name: Publish stable
+
+# Every push to stable (the merge of a pull request: from "Create new
+# stable", release.yml, or a backport) is published as the next stable
+# version, YY.MM.S (docs/updates.md): the month of today, S one more than the
+# last stable version of this month (tools/next-stable.sh). build.yml builds
+# that very commit, runs every test, the update from the previous stable
+# version and every optional extension, and publishes only if all are green
+# (the signed update on ghcr.io as <version> and channel stable, the GitHub
+# release v<version> with the network ISO). If anything is red nothing is
+# published: "Re-run failed jobs" tries again with the same number.
+
+on:
+  push:
+    branches: [stable]
+
+permissions:
+  contents: read
+
+# One at a time, never cancelled: each one needs the tag of the one before.
+concurrency:
+  group: stable-publish
+  cancel-in-progress: false
+
+jobs:
+  number:
+    name: Next YY.MM.S
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.number.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: number
+        run: |
+          version=$(tools/next-stable.sh)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Stable version: $version ($GITHUB_SHA)" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build, test and publish
+    needs: number
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.number.outputs.version }}
+      ref: ${{ github.sha }}
+    secrets: inherit
+    permissions:
+      contents: write
+      actions: read
+      packages: write
+      pull-requests: read

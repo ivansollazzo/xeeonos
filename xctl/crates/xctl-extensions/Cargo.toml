@@ -1,0 +1,10 @@
+[package]
+name = "xctl-extensions"
+description = "xctl: system extensions"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+xctl-core.workspace = true
+xctl-fetch.workspace = true

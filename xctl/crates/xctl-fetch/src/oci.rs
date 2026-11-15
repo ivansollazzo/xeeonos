@@ -18,8 +18,8 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::update::{download_with, is_plain_file_name};
-use crate::util::{Result, err};
+use crate::manifest::{download_large, download_with, is_plain_file_name};
+use xctl_core::util::{Result, err};
 
 /// A reference like `ghcr.io/ivansollazzo/xeeonos:experimental`, split up.
 #[derive(Debug, PartialEq)]
@@ -49,9 +49,9 @@ fn parse_reference(reference: &str) -> Result<Reference> {
 
 /// An opened artifact: we know its files and can download them.
 pub struct Artifact {
-    base: String,                   // https://<registry>/v2/<repo>
-    auth: Vec<String>,              // the Authorization header, if any
-    files: HashMap<String, String>, // file name -> blob digest
+    base: String,                                  // https://<registry>/v2/<repo>
+    auth: Vec<String>,                             // the Authorization header, if any
+    files: HashMap<String, (String, Option<u64>)>, // file name -> blob digest, size
 }
 
 impl Artifact {
@@ -90,11 +90,16 @@ impl Artifact {
 
     /// Download the file called `name` into `to`.
     pub fn download(&self, name: &str, to: &Path) -> Result<()> {
-        let digest = self
+        let (digest, size) = self
             .files
             .get(name)
             .ok_or_else(|| err(format!("the update has no file named {name}")))?;
-        download_with(&format!("{}/blobs/{digest}", self.base), to, &self.auth)
+        download_large(
+            &format!("{}/blobs/{digest}", self.base),
+            to,
+            &self.auth,
+            *size,
+        )
     }
 }
 
@@ -165,7 +170,7 @@ fn tags_in_page(json: &str) -> Result<Vec<String>> {
 }
 
 /// File name -> digest, from an OCI image manifest (JSON).
-fn files_in_manifest(manifest: &str) -> Result<HashMap<String, String>> {
+fn files_in_manifest(manifest: &str) -> Result<HashMap<String, (String, Option<u64>)>> {
     let json: Value =
         serde_json::from_str(manifest).map_err(|e| err(format!("invalid OCI manifest: {e}")))?;
     let layers = json["layers"]
@@ -188,7 +193,10 @@ fn files_in_manifest(manifest: &str) -> Result<HashMap<String, String>> {
                 "invalid file in OCI manifest: {name} ({digest})"
             )));
         }
-        files.insert(name.to_string(), digest.to_string());
+        files.insert(
+            name.to_string(),
+            (digest.to_string(), layer["size"].as_u64()),
+        );
     }
     Ok(files)
 }
@@ -231,13 +239,13 @@ mod tests {
         let digest = format!("sha256:{}", "a".repeat(64));
         let m = format!(
             r#"{{"schemaVersion":2,"layers":[
-                {{"digest":"{digest}","annotations":{{"org.opencontainers.image.title":"SHA256SUMS"}}}},
+                {{"digest":"{digest}","size":1234,"annotations":{{"org.opencontainers.image.title":"SHA256SUMS"}}}},
                 {{"digest":"{digest}"}}
             ]}}"#
         );
         let files = files_in_manifest(&m).unwrap();
         assert_eq!(files.len(), 1);
-        assert_eq!(files["SHA256SUMS"], digest);
+        assert_eq!(files["SHA256SUMS"], (digest.clone(), Some(1234)));
 
         let evil = format!(
             r#"{{"layers":[{{"digest":"{digest}","annotations":{{"org.opencontainers.image.title":"../x"}}}}]}}"#

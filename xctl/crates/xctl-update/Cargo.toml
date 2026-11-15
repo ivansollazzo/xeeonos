@@ -1,0 +1,11 @@
+[package]
+name = "xctl-update"
+description = "xctl: updates and channels"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+xctl-core.workspace = true
+xctl-fetch.workspace = true
+xctl-extensions.workspace = true

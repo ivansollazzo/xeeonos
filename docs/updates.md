@@ -63,20 +63,51 @@ in January):
 | Branch / channel | What | Versions |
 |---|---|---|
 | `testing` | What comes next: new features, new Arch snapshots; every merge is published | `26.12-testing.7` |
-| `stable` | Fixed versions; fixes come as backports from testing | `26.12.1`, `26.12.2`, `27.1.1` |
+| `stable` | Fixed versions; changes only through a pull request | `26.12.1`, `26.12.2`, `27.1.1` |
 
-**Stable versions are published by hand.** A merge into `stable` is built
-and tested (`26.12-rc.<n>`), never published. Actions → **Pubblica
-versione** → Run workflow (on `stable`), `.github/workflows/release.yml`:
+**Everything enters stable through a pull request, and every merge is
+published.** There are two ways in:
+
+- **Ordinary updates**: Actions → **Update Arch snapshot** (on `testing`),
+  merge it when green; then Actions → **Create new stable** → Run workflow
+  (`.github/workflows/release.yml`, on `testing`). It freezes testing as it
+  is in a branch `new-stable-<run>` and opens a pull request from it to
+  `stable`.
+- **Everything else, by hand**: a pull request to `stable` made for the
+  purpose: a fix of xctl or of the configuration taken from testing
+  (cherry-pick, same Arch snapshot), or an urgent security update, which
+  moves the whole Arch snapshot (never single packages).
+
+A pull request to stable is built as the version it would become
+(`26.12.3-rc.<run>`, `tools/next-stable.sh`) and runs **every** test (none is skipped as
+"not touched"), plus two more:
+
+- **Test stable-update** (`tools/ci/stable-update.sh`): a disk made from the
+  stable version published today, with some data and an optional extension
+  turned on, updates itself to the pull request's build with its own xctl;
+  the new version must start with the data and the extension.
+- **Test optional extensions**: every optional extension of
+  [xeeonos-extensions](https://github.com/ivansollazzo/xeeonos-extensions)
+  (its `stable` branch) is built for the pull request's images and tried on
+  them in a virtual machine, with that repository's own tools.
+
+When it is green and merged, `.github/workflows/stable.yml` publishes it by
+itself:
 
 1. works out the number YY.MM.S: the month of today, S one more than the
-   last version of this month (tags `v26.12.*`); S grows at every release
-   (a new snapshot, something important, a backport);
-2. builds and runs every test (`build.yml`);
+   last version of this month (tags `v26.12.*`); S grows at every
+   publication (a new snapshot, something important, a backport);
+2. builds that commit and runs everything again, the two tests above
+   included (`build.yml`);
 3. only if all are green: publishes the signed update as `26.12.2` and on
    the channel `stable`, and the GitHub release `v26.12.2` with the ISO
    (which tags the commit `v26.12.2`). If anything is red, nothing is
-   published.
+   published ("Re-run failed jobs" tries again). The optional extensions
+   are then published by xeeonos-extensions, which builds them for every
+   published version; `xctl update` waits for the ones turned on.
+
+On `stable` a ruleset requires a pull request with every check green; nobody
+pushes to it directly.
 
 **Two ISOs.** The **full ISO** carries the system and installs offline; at
 2.6 GB it is over GitHub's 2 GiB limit for release files, so it stays in

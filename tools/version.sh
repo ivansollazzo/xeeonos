@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 # Print the full XeeonOS version for this build (docs/updates.md).
 #
@@ -6,9 +5,12 @@
 # is the channel and the registry tag:
 #
 #   testing      -> 26.11-testing.57        (every merge publishes one)
-#   stable       -> 26.11.2                 only from the stable promotion
-#                   workflow (release.yml), which sets XEEONOS_VERSION
-#   anything     -> 26.11-dev.0             (pull requests, local builds)
+#   stable       -> 26.11.2                 every merge publishes one: the
+#                   workflow stable.yml sets XEEONOS_VERSION
+#   pull request -> 26.11.3-rc.12           to stable: the number the merge
+#                   would get (tools/next-stable.sh), so the build counts as
+#                   newer than the stable version it updates in the tests
+#   anything     -> 26.11-dev.0             (other pull requests, local builds)
 #
 # The number at the end is the CI run number: every build is unique and
 # ordered. XEEONOS_MONTH (YY.MM) overrides the month, for tests.
@@ -36,6 +38,7 @@ else
         stable) stage=rc ;;
         *) stage=dev ;;
     esac
+    [[ ${GITHUB_BASE_REF:-} == stable ]] && stage=rc
 fi
 
 if [[ ${1:-} == --channel ]]; then
@@ -48,6 +51,8 @@ fi
 
 if [[ $stage == release ]]; then
     echo "$release"
+elif [[ $stage == rc ]]; then
+    echo "$(tools/next-stable.sh)-rc.$build"
 else
     echo "$month-$stage.$build"
 fi

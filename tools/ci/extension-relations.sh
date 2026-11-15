@@ -45,14 +45,14 @@ xctl extensions list --offline | sed s,^,AFTER-,
 " --http "$system" --credential "xctl.keyring=$RUNNER_TEMP/test-keyring.gpg" \
     --expect "REMOTE- +ci-needs +.*needs: ci-hello" \
     --expect "REMOTE- +ci-clash +.*not with: ci-hello" \
-    --expect "NEEDS-ASK-ci-needs needs: ci-hello\." \
+    --expect "NEEDS-ASK-(xctl: )?ci-needs needs: ci-hello\." \
     --expect "NEEDS-ASK-.*give --yes to turn them on" \
     --expect "NEEDS-REFUSED" \
     --expect "Extension ci-hello: on\." \
     --expect "Extension ci-needs: on\." \
     --expect "ON- +ci-hello +on " \
     --expect "ON- +ci-needs +on " \
-    --expect "DISABLE-ASK-ci-needs need ci-hello: they will be turned off too\." \
+    --expect "DISABLE-ASK-(xctl: )?ci-needs need ci-hello: they will be turned off too\." \
     --expect "CLASH-ci-clash cannot be on together with: .*ci-hello" \
     --expect "CLASH-Extension ci-needs: off\." \
     --expect "CLASH-Extension ci-hello: off\." \

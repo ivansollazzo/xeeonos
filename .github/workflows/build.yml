@@ -111,9 +111,12 @@ jobs:
             done
             if [[ -n $prev ]]; then
               read -r prev_key prev_version prev_run < "$RUNNER_TEMP/prev/image-key.txt"
-              # Its images must still be there (artifacts are kept 3 days).
+              # Its images must still be there (artifacts are kept 3 days;
+              # a run deleted by hand takes them along, and its API answers
+              # 404: then build).
               have=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$prev_run/artifacts?per_page=100" \
-                --jq '[.artifacts[] | select(.expired | not) | .name | select(. == "disk-image" or . == "update-system" or . == "update-next" or . == "live")] | length')
+                --jq '[.artifacts[] | select(.expired | not) | .name | select(. == "disk-image" or . == "update-system" or . == "update-next" or . == "live")] | length' ||
+                echo 0)
               if [[ $prev_key == "$key" && $have == 4 ]]; then
                 version=$prev_version
                 run=$prev_run

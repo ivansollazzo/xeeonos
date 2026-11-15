@@ -108,6 +108,28 @@ fn libstdcxx_level(root: &Path) -> Option<u64> {
     name.rsplit('.').next()?.parse().ok()
 }
 
+/// The regular file that `usr/lib/<name>` is in the image, following
+/// relative links inside usr/lib; `None` when there is none.
+fn real_file_in(image: &Path, name: &str) -> Option<String> {
+    let dir = image.join("usr/lib");
+    let mut name = name.to_string();
+    for _ in 0..8 {
+        let meta = fs::symlink_metadata(dir.join(&name)).ok()?;
+        if meta.is_file() {
+            return Some(name);
+        }
+        if !meta.file_type().is_symlink() {
+            return None;
+        }
+        let target = fs::read_link(dir.join(&name)).ok()?;
+        if !target.is_relative() || target.components().count() != 1 {
+            return None;
+        }
+        name = target.to_string_lossy().into_owned();
+    }
+    None
+}
+
 /// Can the system lend its drivers to this application? `Err` says why not.
 pub fn compatible(image: &Path, app_glibc: &str) -> Result<()> {
     let host = host_glibc().ok_or_else(|| err("cannot read the system's glibc version"))?;
@@ -244,9 +266,10 @@ pub fn setup(image: &Path, instance: &Path) -> Result<Setup> {
             .to_string_lossy()
             .into_owned();
         let real = fs::canonicalize(&lib).unwrap_or(lib.clone());
-        let in_app = image.join("usr/lib").join(&name);
-        if in_app.symlink_metadata().is_ok() {
-            s.binds.push((real, format!("{LIB}/{name}")));
+        // bwrap cannot mount on a link (libEGL.so.1 -> libEGL.so.1.1.0):
+        // bind over the file the application's link leads to.
+        if let Some(file) = real_file_in(image, &name) {
+            s.binds.push((real, format!("{LIB}/{file}")));
         } else {
             s.binds.push((real, format!("{HOST_GPU}/lib/{name}")));
             extra_lib = true;
@@ -308,6 +331,27 @@ pub fn setup(image: &Path, instance: &Path) -> Result<Setup> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn real_files() {
+        let root = std::env::temp_dir().join(format!("xapp-gpu-test-{}", std::process::id()));
+        let lib = root.join("usr/lib");
+        fs::create_dir_all(&lib).unwrap();
+        fs::write(lib.join("libEGL.so.1.1.0"), b"x").unwrap();
+        std::os::unix::fs::symlink("libEGL.so.1.1.0", lib.join("libEGL.so.1")).unwrap();
+        std::os::unix::fs::symlink("/usr/lib/x.so", lib.join("abs.so.1")).unwrap();
+        assert_eq!(
+            real_file_in(&root, "libEGL.so.1").as_deref(),
+            Some("libEGL.so.1.1.0")
+        );
+        assert_eq!(
+            real_file_in(&root, "libEGL.so.1.1.0").as_deref(),
+            Some("libEGL.so.1.1.0")
+        );
+        assert_eq!(real_file_in(&root, "abs.so.1"), None);
+        assert_eq!(real_file_in(&root, "missing.so.1"), None);
+        fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn versions() {

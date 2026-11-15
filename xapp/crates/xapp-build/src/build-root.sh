@@ -42,10 +42,24 @@ Server = https://archive.archlinux.org/repos/$snapshot/\$repo/os/\$arch
 [extra]
 Server = https://archive.archlinux.org/repos/$snapshot/\$repo/os/\$arch
 CONF
-# pacstrap mounts /proc, /sys, /dev into the root so that the packages'
-# hooks (library cache, icon and font caches, GSettings schemas) run.
-# -G: no keyring copy, -M: no mirror list copy.
-pacstrap -C /tmp/pacman.conf -G -M "$root" bash glibc "$@"
+# Like pacstrap: /dev, /proc, /sys in the root so that the packages' hooks
+# (library cache, icon and font caches, GSettings schemas) run. Only bind
+# mounts, because a rootless container (podman on XeeonOS, on the CI
+# runners) may not mount devtmpfs or sysfs, which pacstrap does.
+mkdir -p "$root/dev" "$root/proc" "$root/sys" "$root/var/lib/pacman" "$root/var/cache/pacman/pkg"
+mount --rbind /dev "$root/dev"
+mount -t proc proc "$root/proc" 2>/dev/null || mount --rbind /proc "$root/proc"
+mount --rbind /sys "$root/sys"
+unmount() {
+    local m
+    for m in "$root/sys" "$root/proc" "$root/dev"; do
+        if mountpoint -q "$m"; then umount -R "$m" 2>/dev/null || umount -R -l "$m"; fi
+    done
+}
+trap unmount EXIT
+# The keyring of this container checks the packages (no copy in the root).
+pacman --config /tmp/pacman.conf --root "$root" --cachedir "$root/var/cache/pacman/pkg" \
+    -Sy --noconfirm bash glibc "$@"
 
 q() { pacman --root "$root" --dbpath "$root/var/lib/pacman" -Q "$@"; }
 q > "$out/packages.txt"
@@ -70,6 +84,12 @@ fi
 
 # Out: what only a whole system or a developer needs. The sandbox brings
 # its own empty /tmp, /var, /run, /proc, /dev, /sys, and the home.
+# Never delete through a mount of this container's /dev, /proc, /sys.
+unmount
+if grep -q " /work/root/" /proc/self/mounts; then
+    echo "build-root.sh: something is still mounted in the root" >&2
+    exit 1
+fi
 cd /work/root
 rm -rf ./boot ./home ./root ./srv ./mnt ./media ./tmp ./run ./proc ./sys ./dev ./var ./lost+found
 rm -rf ./usr/include ./usr/share/doc ./usr/share/man ./usr/share/info ./usr/share/gtk-doc

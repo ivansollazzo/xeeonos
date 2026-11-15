@@ -173,7 +173,12 @@ fn host_libraries() -> Vec<PathBuf> {
     if let Some(text) = output_opt("ldd", &args) {
         for line in text.lines() {
             // "\tlibdrm.so.2 => /usr/lib/libdrm.so.2 (0x...)" or
-            // "\t/usr/lib64/ld-linux-x86-64.so.2 (0x...)"
+            // "\t/usr/lib64/ld-linux-x86-64.so.2 (0x...)". With several
+            // files ldd also prints a header per file, not indented
+            // ("/usr/lib/dri/apple_dri.so:"): not a library to lend.
+            if !line.starts_with(char::is_whitespace) {
+                continue;
+            }
             let path = match line.split_once("=>") {
                 Some((_, rest)) => rest.split_whitespace().next(),
                 None => line
@@ -185,6 +190,9 @@ fn host_libraries() -> Vec<PathBuf> {
                 continue;
             };
             let path = PathBuf::from(path);
+            if !path.exists() {
+                continue;
+            }
             let name = path
                 .file_name()
                 .unwrap_or_default()

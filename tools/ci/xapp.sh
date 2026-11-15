@@ -101,7 +101,7 @@ as_test xapp info org.xeeonos.Hello | sed s,^,INFO-,
 
 # Refused: a changed file, another author's copy, a revoked application.
 as_test cp $home/Applications/Hello.xapp /tmp/changed.xapp
-printf 'X' | dd of=/tmp/changed.xapp bs=1 seek=200000 conv=notrunc status=none
+printf 'X' | as_test dd of=/tmp/changed.xapp bs=1 seek=200000 conv=notrunc status=none
 as_test xapp verify /tmp/changed.xapp 2>&1 | sed s,^,CHANGED-,
 as_test curl -fsS "$url/fake.xapp" -o /tmp/fake.xapp
 as_test xapp verify /tmp/fake.xapp 2>&1 | sed s,^,FAKE-,

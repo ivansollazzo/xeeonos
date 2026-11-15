@@ -1,0 +1,12 @@
+[package]
+name = "xapp-desktop"
+description = "xapp: ~/Applications and the desktop"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+xapp-core.workspace = true
+xapp-format.workspace = true
+xapp-trust.workspace = true
+xapp-permissions.workspace = true

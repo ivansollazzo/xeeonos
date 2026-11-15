@@ -1,0 +1,11 @@
+[package]
+name = "xapp-trust"
+description = "xapp: signatures and trust"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+xapp-core.workspace = true
+xapp-format.workspace = true
+ed25519-dalek.workspace = true

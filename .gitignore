@@ -8,4 +8,5 @@ mkosi.workspace/
 out/
 *.iso
 xctl/target/
+xapp/target/
 __pycache__/

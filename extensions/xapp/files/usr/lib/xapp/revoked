@@ -1,0 +1,6 @@
+# Revoked applications (docs/xapp.md): one per line,
+#   key <public key hex>     every application of that author
+#   app <application id>     every copy of that application
+#   image <sha256>           one exact file
+# They come with system updates; the administrator adds others in
+# /etc/xapp/revoked. A revoked application does not open.

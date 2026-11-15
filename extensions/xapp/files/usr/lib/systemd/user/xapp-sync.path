@@ -1,0 +1,13 @@
+# Watch ~/Applications (made if missing): a file added, replaced, renamed or
+# deleted starts xapp-sync.service.
+[Unit]
+Description=Watch ~/Applications for .xapp applications
+
+[Path]
+PathChanged=%h/Applications
+MakeDirectory=yes
+DirectoryMode=0755
+Unit=xapp-sync.service
+
+[Install]
+WantedBy=default.target

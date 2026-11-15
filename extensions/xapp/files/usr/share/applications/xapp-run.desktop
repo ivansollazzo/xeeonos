@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=XeeonOS Application
+Name[it]=Applicazione XeeonOS
+Comment=Open a .xapp application
+Comment[it]=Apri un'applicazione .xapp
+Exec=xapp run %f
+Icon=application-x-executable
+NoDisplay=true
+Terminal=false
+MimeType=application/x-xapp;

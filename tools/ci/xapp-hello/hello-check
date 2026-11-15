@@ -1,0 +1,26 @@
+#!/bin/bash
+# What the test application sees inside its sandbox (tools/ci/xapp.sh):
+# one line "IN-<check>-<result>" per check.
+out() { echo "IN-$*"; }
+out "HOME-$HOME"
+grep -q '^image of org.xeeonos.Hello' /usr/share/xapp-hello/marker && out ROOTFS-app
+test -e /usr/bin/xctl && out HOST-visible || out HOST-hidden
+test -e "$HOME/secret.txt" && out SECRET-visible || out SECRET-hidden
+docs=$(ls "$HOME"/Documents/doc.txt 2>/dev/null) && out "DOCS-visible" || out DOCS-hidden
+ls "$HOME"/Pictures/pic.txt >/dev/null 2>&1 && out PICS-visible || out PICS-hidden
+out "PID1-$(cat /proc/1/comm)"
+# Network not allowed: only the loopback interface (2 header lines + lo).
+test "$(grep -c . /proc/net/dev)" -le 3 && out NET-off || out NET-on
+unshare -U true 2>/dev/null && out USERNS-allowed || out USERNS-blocked
+touch /usr/x 2>/dev/null && out USR-writable || out USR-readonly
+for f in "$@"; do test -r "$f" && out "ARG-readable-$f"; done
+wayland-info 2>/dev/null | grep -q wl_compositor && out WAYLAND-ok || out WAYLAND-missing
+renderer=$(eglinfo -B 2>/dev/null | grep -m1 -i 'renderer' | sed 's/.*: *//')
+out "GPU-${renderer:-none}"
+# The filtered session bus: the desktop portal answers, GNOME Shell does
+# not exist.
+dbus-send --session --print-reply --dest=org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop \
+    org.freedesktop.DBus.Properties.Get string:org.freedesktop.portal.Settings string:version \
+    >/dev/null 2>&1 && out BUS-portal || out BUS-no-portal
+dbus-send --session --print-reply --dest=org.gnome.Shell /org/gnome/Shell org.freedesktop.DBus.Peer.Ping \
+    >/dev/null 2>&1 && out BUS-shell-reachable || out BUS-shell-hidden

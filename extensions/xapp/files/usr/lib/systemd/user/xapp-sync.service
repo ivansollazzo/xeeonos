@@ -1,0 +1,14 @@
+# The monitor of ~/Applications: brings the menu in line with the .xapp
+# files of the folder (xapp sync). Started at login, whenever the folder
+# changes (xapp-sync.path) and every 15 minutes (xapp-sync.timer).
+[Unit]
+Description=Applications of ~/Applications in the menu
+Documentation=https://github.com/ivansollazzo/xeeonos/blob/testing/docs/xapp.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/xapp sync --quiet
+Nice=10
+
+[Install]
+WantedBy=default.target

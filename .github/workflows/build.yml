@@ -68,9 +68,24 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
 
+  xapp:
+    name: xapp (format, lint, unit tests)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: xapp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - run: rustup update stable && rustup default stable
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+
   build:
     name: Build system, next version and live image
-    needs: xctl
+    needs: [xctl, xapp]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
@@ -295,6 +310,7 @@ jobs:
           - {test: flatpak, artifacts: disk-image}
           - {test: printing, artifacts: disk-image}
           - {test: scanner, artifacts: disk-image}
+          - {test: xapp, artifacts: disk-image}
           - {test: extensions, artifacts: '{disk-image,update-system}'}
           - {test: extension-relations, artifacts: '{disk-image,update-system}'}
           - {test: secureboot, artifacts: '{disk-image,update-next}'}

@@ -1,0 +1,16 @@
+[package]
+name = "xapp"
+description = "The XeeonOS application tool"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+xapp-core.workspace = true
+xapp-format.workspace = true
+xapp-trust.workspace = true
+xapp-permissions.workspace = true
+xapp-sandbox.workspace = true
+xapp-desktop.workspace = true
+xapp-build.workspace = true
+serde_json.workspace = true

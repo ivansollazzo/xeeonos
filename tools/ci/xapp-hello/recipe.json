@@ -1,0 +1,24 @@
+{
+  "app_id": "org.xeeonos.Hello",
+  "name": "Hello",
+  "names": {"it": "Ciao"},
+  "description": "The test application of tools/ci/xapp.sh",
+  "version": "1.0",
+  "snapshot": "2026/11/13",
+  "packages": ["coreutils", "util-linux", "grep", "dbus", "wayland-utils", "mesa-utils"],
+  "exec": ["/usr/bin/hello-check"],
+  "gpu": "host",
+  "permissions": [
+    {"id": "network", "reason": "To check that the network is cut off when not allowed"},
+    {"id": "gpu", "reason": "To draw with the graphics drivers of the system"},
+    {"id": "notifications", "reason": "To check the filtered session bus"},
+    {"id": "documents", "reason": "To check a folder that was given"},
+    {"id": "pictures", "reason": "To check a folder that was not given"},
+    {"id": "audio", "reason": "To check a permission that is asked"}
+  ],
+  "mime_types": ["text/x-xapp-hello"],
+  "categories": ["Utility"],
+  "wm_class": "hello",
+  "icon": "icon.svg",
+  "script": "build.sh"
+}

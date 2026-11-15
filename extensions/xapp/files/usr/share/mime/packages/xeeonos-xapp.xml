@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The file type of XeeonOS applications (docs/xapp.md): by name, and by
+     the magic xapp writes in the first bytes of the image. xapp sync copies
+     this file into the user's database (~/.local/share/mime). -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-xapp">
+    <comment>XeeonOS application</comment>
+    <comment xml:lang="it">Applicazione XeeonOS</comment>
+    <generic-icon name="application-x-executable"/>
+    <magic priority="90">
+      <match type="string" offset="0" value="\177XAPP1\n"/>
+    </magic>
+    <glob pattern="*.xapp"/>
+  </mime-type>
+</mime-info>

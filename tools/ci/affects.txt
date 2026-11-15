@@ -31,6 +31,7 @@ tools tools/ci/tools.sh mkosi.conf.d/tools/ xctl/crates/xctl-system/src/ssh.rs x
 flatpak tools/ci/flatpak.sh extensions/flatpak/ tools/mkext.sh tools/mkext-install.sh xctl/crates/xctl-extensions/src/ext.rs xctl/crates/xctl-core/src/apps.rs
 printing tools/ci/printing.sh extensions/printing/ tools/mkext.sh tools/mkext-install.sh xctl/crates/xctl-extensions/src/ext.rs
 scanner tools/ci/scanner.sh extensions/scanner/ tools/mkext.sh tools/mkext-install.sh xctl/crates/xctl-extensions/src/ext.rs
+xapp tools/ci/xapp.sh tools/ci/xapp-hello/ extensions/xapp/ xapp/ tools/mkext.sh tools/mkext-install.sh
 extensions tools/ci/extensions.sh extensions/ tools/mkext.sh tools/mkext-install.sh
 extensions xctl/crates/xctl-extensions/src/ext.rs xctl/crates/xctl-update/src/update.rs xctl/crates/xctl-fetch/src/manifest.rs
 extension-relations tools/ci/extension-relations.sh extensions/ci-hello/ extensions/ci-needs/ extensions/ci-clash/ tools/mkext.sh tools/mkext-install.sh

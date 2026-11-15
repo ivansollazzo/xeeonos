@@ -66,6 +66,7 @@ Recovery always starts without extensions.
 | `flatpak` | included, special | Applications from Flathub, GNOME Software (see [flatpak.md](flatpak.md)) |
 | `printing` | included, special | Printers: CUPS, network printers, Printers page (see [printing.md](printing.md)) |
 | `scanner` | included, special | Scanners: SANE, driverless scanning (network and USB), Document Scanner (see [scanner.md](scanner.md)) |
+| `xapp` | included, special | XeeonOS applications: one `.xapp` file per application in ~/Applications, each in its own sandbox (see [xapp.md](xapp.md)) |
 | `podman`, `distrobox`, `docker`, `rocm`, `rocm-sdk`, `thermald`, `tlp`, `dev-tools`, `thinkpad-t14-amd-touchpad` | optional | see [xeeonos-extensions](https://github.com/ivansollazzo/xeeonos-extensions) |
 | `ci-hello` | optional, CI only | the test extension of `tools/ci/extensions.sh` |
 

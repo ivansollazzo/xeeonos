@@ -1,0 +1,4 @@
+[Thumbnailer Entry]
+TryExec=xapp
+Exec=xapp thumbnail %i %o %s
+MimeType=application/x-xapp;

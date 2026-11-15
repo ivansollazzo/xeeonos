@@ -1,0 +1,10 @@
+[package]
+name = "xapp-permissions"
+description = "xapp: permissions"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+xapp-core.workspace = true
+xapp-format.workspace = true

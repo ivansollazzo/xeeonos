@@ -1,0 +1,4 @@
+Public keys (Ed25519, 64 hex digits, one per line, in files named *.pub)
+of authors XeeonOS trusts: their applications open without the "unknown
+author" question. They come with system updates. The administrator adds
+others in /etc/xapp/trusted.d/. See docs/xapp.md.

@@ -132,18 +132,22 @@ ogni build apre da solo la sua pull request e la unisce se è verde).
 
 ## Cosa resta da fare
 
+Già fatto (2026-11-14): installazione sul ThinkPad con Secure Boot (chiavi
+proprie) e sblocco TPM, aggiornamento dal vivo, backup della chiave di firma
+fuori dal PC, Flatpak preinstallati al primo avvio (domanda nel setup), il
+touchpad del T14 con l'estensione.
+
 In ordine di importanza:
 
-1. Prova su hardware vero: installazione, aggiornamento dal vivo, Secure
-   Boot, TPM, sospensione, Wi-Fi, il touchpad del T14 con l'estensione
-   (da `xeeonos-extensions`).
-2. Backup della chiave di firma fuori dal PC.
+1. La prima stable con il nuovo flusso (Actions → **Create new stable**):
+   la prima prova vera di Test stable-update e delle estensioni opzionali
+   sulle immagini nuove.
+2. Aggiornare il ThinkPad alla stable nuova, con le estensioni accese.
 3. `.xapp`: da ripensare da zero (repository `xeeonos-applications`).
-4. Flatpak preinstallati (al primo avvio o nella ISO): da decidere.
-5. Installatore grafico in Qt (oggi `xctl install-system` testuale).
-6. Logo e grafica (schermata di avvio, sfondo, schermata di login).
-7. Estensioni nuove: nel repository `xeeonos-extensions` (le incluse,
-   flatpak e printing, restano in `extensions/` qui).
+4. Installatore grafico in Qt (oggi `xctl install-system` testuale).
+5. Logo e grafica (schermata di avvio, sfondo, schermata di login).
+6. Estensioni nuove: nel repository `xeeonos-extensions` (le incluse,
+   flatpak, printing e scanner, restano in `extensions/` qui).
 
 ## Idee e decisioni prese (da non rimettere in discussione senza motivo)
 

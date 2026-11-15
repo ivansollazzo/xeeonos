@@ -1,8 +1,14 @@
-name: Publish new stable
+name: Create new stable
 
-# Promote testing to stable:
-# calculate the next stable version, merge testing into stable,
-# then build, test and publish the exact merge commit.
+# Testing becomes the next stable version (docs/updates.md), through a pull
+# request: this workflow freezes testing as it is now in a branch
+# new-stable-<run> and opens a pull request from it to stable. Its checks
+# run every test, the update from today's stable version, and every optional
+# extension on the new images. Merge it when it is green: the merge publishes
+# the next YY.MM.S by itself (stable.yml). Nothing else writes to stable.
+#
+# The branch and the pull request are made with XEEONOS_BOT_TOKEN: what the
+# workflow's own token makes starts no checks.
 
 on:
   workflow_dispatch:
@@ -11,19 +17,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: stable-promotion
+  group: create-new-stable
   cancel-in-progress: false
 
 jobs:
-  promote:
-    name: Promote testing to stable
+  propose:
+    name: Open the pull request testing -> stable
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    outputs:
-      version: ${{ steps.number.outputs.version }}
-      merge_sha: ${{ steps.merge.outputs.merge_sha }}
-
     steps:
       - name: Only from testing
         if: github.ref_name != 'testing'
@@ -35,64 +35,41 @@ jobs:
         with:
           ref: testing
           fetch-depth: 0
-          fetch-tags: true
           persist-credentials: false
 
-      - name: Fetch branches
-        run: git fetch origin testing stable --tags
-
-      - name: Next YY.MM.S
-        id: number
-        run: |
-          month=$(date -u +%y.%-m)
-          last=$(git tag --merged origin/stable --list "v$month.*" |
-            sed "s/^v$month\\.//" |
-            awk '/^[0-9]+$/ { print }' |
-            sort -n |
-            tail -n1)
-
-          version=$month.$(( ${last:-0} + 1 ))
-
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Stable version: $version" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Merge testing into stable
-        id: merge
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git checkout -B stable origin/stable
-          git merge --no-ff --no-edit origin/testing
-
-          merge_sha=$(git rev-parse HEAD)
-          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
-          echo "Promoted commit: $merge_sha" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Push stable
+      - name: Open it
         env:
           GH_TOKEN: ${{ secrets.XEEONOS_BOT_TOKEN }}
         run: |
-          if [[ -z "$GH_TOKEN" ]]; then
+          if [[ -z $GH_TOKEN ]]; then
             echo "::error::XEEONOS_BOT_TOKEN is not configured"
             exit 1
           fi
-
-          git remote set-url origin \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-
-          git push origin HEAD:refs/heads/stable
-
-  build:
-    name: Build, test and publish stable
-    needs: promote
-    uses: ./.github/workflows/build.yml
-    with:
-      version: ${{ needs.promote.outputs.version }}
-      ref: ${{ needs.promote.outputs.merge_sha }}
-    secrets: inherit
-    permissions:
-      contents: write
-      actions: read
-      packages: write
-      pull-requests: read
+          git fetch --quiet origin +refs/heads/stable:refs/remotes/origin/stable
+          changes=$(git log --oneline --no-merges origin/stable..HEAD)
+          if [[ -z $changes ]]; then
+            echo "Testing has nothing that stable does not have: no pull request." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          next=$(tools/next-stable.sh)
+          branch=new-stable-$GITHUB_RUN_NUMBER
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin "HEAD:refs/heads/$branch"
+          {
+            echo "Testing as of $(date -u '+%Y-%m-%d %H:%M UTC') ($(git rev-parse --short HEAD)) becomes the next stable version."
+            echo
+            echo "**Merging publishes it** as XeeonOS $next (the number is worked out at the merge: the month of that day, one more than the last stable version of the month)."
+            echo
+            echo "The checks run every test, the update from today's stable version (Test stable-update) and every optional extension of xeeonos-extensions on the new images (Test optional extensions)."
+            echo
+            echo "Changes since stable:"
+            echo
+            echo '```'
+            head -n 200 <<< "$changes"
+            echo '```'
+          } > "$RUNNER_TEMP/body.md"
+          url=$(gh api "repos/$GITHUB_REPOSITORY/pulls" \
+            -f base=stable -f head="$branch" \
+            -f title="New stable version (testing of $(date -u +%Y-%m-%d))" \
+            -F body=@"$RUNNER_TEMP/body.md" --jq .html_url)
+          echo "Pull request: $url" >> "$GITHUB_STEP_SUMMARY"

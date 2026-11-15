@@ -3,9 +3,15 @@ name: Build
 # Branches = channels (tools/version.sh, docs/updates.md):
 # - testing: every push (merge) is built, tested and published
 #   (26.12-testing.7);
-# - stable: promoted explicitly by release.yml. The promotion calls this
-#   workflow with the stable version and the exact merge commit to build.
-# Pull requests build and test, but never publish anything.
+# - stable: every push (merge of a pull request) is published as the next
+#   YY.MM.S by stable.yml, which calls this workflow with that version and
+#   the commit to build.
+# Pull requests build and test, but never publish anything. Pull requests to
+# stable run every test (no targeting), plus two more: the update from the
+# stable version published today to this build (Test stable-update), and
+# every optional extension of xeeonos-extensions (stable branch) built and
+# tried on this build (Test optional extensions). The publishing of stable
+# runs them too: a version whose extensions do not build is not published.
 on:
   push:
     branches: [testing]
@@ -14,7 +20,7 @@ on:
   workflow_call:
     inputs:
       version:
-        description: Stable version to build and publish (YY.MM.S)
+        description: Stable version to build and publish (YY.MM.S, from stable.yml)
         type: string
         required: true
       ref:
@@ -22,12 +28,12 @@ on:
         type: string
         required: true
 
-# The stable version, when called by release.yml (tools/version.sh reads it).
+# The stable version, when called by stable.yml (tools/version.sh reads it).
 env:
   XEEONOS_VERSION: ${{ inputs.version }}
 
 # A new push to a pull request replaces its running checks.
-# A release (release.yml) has its own group and is never cancelled.
+# A stable publish (stable.yml) has its own group and is never cancelled.
 concurrency:
   group: build-${{ github.ref }}${{ inputs.version && format('-{0}', inputs.version) || '' }}
   cancel-in-progress: ${{ !inputs.version }}
@@ -287,6 +293,7 @@ jobs:
           - {test: printing, artifacts: disk-image}
           - {test: scanner, artifacts: disk-image}
           - {test: extensions, artifacts: '{disk-image,update-system}'}
+          - {test: extension-relations, artifacts: '{disk-image,update-system}'}
           - {test: secureboot, artifacts: '{disk-image,update-next}'}
           - {test: iso-install, artifacts: '{live,update-system}'}
           - {test: iso-alongside, artifacts: '{live,update-system}'}
@@ -297,9 +304,9 @@ jobs:
 
       # Targeted tests: on a pull request, a test whose files
       # (tools/ci/affects.txt) did not change finishes green at once.
-      # Channel branches always run every test.
+      # Channel branches, and pull requests to stable, always run every test.
       - name: Is this test touched by the pull request?
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.base_ref != 'stable'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -377,12 +384,189 @@ jobs:
           path: out/serial-*.log
           if-no-files-found: ignore
 
-  # Publishing: only for pushes to testing, or an explicit stable promotion
-  # through workflow_call, after every test passed.
+  # From the stable version published today to this build: pull requests to
+  # stable and the publishing of stable (tools/ci/stable-update.sh).
+  stable-update:
+    name: Test stable-update
+    needs: build
+    if: github.base_ref == 'stable' || inputs.version != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - name: The tools of xeeonos-extensions (mkdisk.sh)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/xeeonos-extensions
+          ref: stable
+          path: xeeonos-extensions
+          persist-credentials: false
+      - name: Install VM tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --assume-yes --no-install-recommends \
+            qemu-system-x86 ovmf zstd dosfstools mtools fdisk jq
+      - name: Let QEMU use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+            sudo tee /etc/udev/rules.d/99-xeeonos-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Download the update files of this build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: update-system
+          path: build/update-system
+          run-id: ${{ needs.build.outputs.run }}
+          github-token: ${{ github.token }}
+      - name: Run tools/ci/stable-update.sh
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          EXTENSIONS_TOOLS: ${{ github.workspace }}/xeeonos-extensions/tools
+        run: tools/ci/stable-update.sh
+      - name: Upload boot logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: serial-logs-stable-update
+          path: out/serial-*.log
+          if-no-files-found: ignore
+
+  # Every optional extension of xeeonos-extensions (its stable branch), built
+  # for this build from its package list and tried on it in a virtual
+  # machine, as that repository's own CI does (tools/ of xeeonos-extensions;
+  # boot-test.sh of this commit): pull requests to stable and the publishing
+  # of stable. A version whose extensions do not build is not published; the
+  # extensions themselves are published right after, by xeeonos-extensions.
+  extensions-plan:
+    name: Optional extensions to try
+    if: github.base_ref == 'stable' || inputs.version != ''
+    runs-on: ubuntu-24.04
+    outputs:
+      names: ${{ steps.names.outputs.names }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/xeeonos-extensions
+          ref: stable
+          persist-credentials: false
+      - id: names
+        run: |
+          names=$(for c in extensions/*/extension.conf; do basename "$(dirname "$c")"; done |
+            jq -R . | jq -sc .)
+          echo "names=$names" >> "$GITHUB_OUTPUT"
+          echo "Optional extensions (xeeonos-extensions, stable): $names" >> "$GITHUB_STEP_SUMMARY"
+
+  extension:
+    name: Extension ${{ matrix.name }}
+    needs: [build, extensions-plan]
+    if: needs.extensions-plan.outputs.names != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        name: ${{ fromJSON(needs.extensions-plan.outputs.names) }}
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      NAME: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          path: xeeonos
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/xeeonos-extensions
+          ref: stable
+          path: xeeonos-extensions
+          persist-credentials: false
+
+      - name: Tools and disk space (rocm-sdk is several GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get update
+          sudo apt-get install --assume-yes --no-install-recommends \
+            zstd erofs-utils jq qemu-system-x86 ovmf dosfstools mtools fdisk
+          sudo mkdir -p /mnt/work
+          sudo chown "$(id -u):$(id -g)" /mnt/work
+          echo "WORK=/mnt/work" >> "$GITHUB_ENV"
+
+      - name: Let QEMU use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+            sudo tee /etc/udev/rules.d/99-xeeonos-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Download the update files of this build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: update-system
+          path: ${{ env.WORK }}/system
+          run-id: ${{ needs.build.outputs.run }}
+          github-token: ${{ github.token }}
+
+      - name: The package list and the Arch snapshot of this build
+        run: |
+          zstd -d -q "$WORK/system/xeeonos_$VERSION.pkgdb.tar.zst" -o "$WORK/pkgdb.tar"
+          echo "SNAPSHOT=$(sed -n 's/^SNAPSHOT=//p' "$WORK/system/xeeonos_$VERSION.build.txt")" >> "$GITHUB_ENV"
+
+      - name: Build
+        working-directory: xeeonos-extensions
+        run: |
+          mkdir -p "$WORK/pkgcache"
+          MKEXT_WORK=$WORK/mkext MKEXT_CACHE=$WORK/pkgcache \
+            tools/mkext.sh "$WORK/pkgdb.tar" "$VERSION" "$SNAPSHOT" "$WORK/out" \
+            $(tools/requires.sh "$NAME") "$NAME"
+          sudo rm -rf "$WORK/mkext"
+          ls -lh "$WORK/out"
+
+      - name: Check the image
+        working-directory: xeeonos-extensions
+        run: tools/check.sh "$VERSION" "$WORK/out" "$NAME" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Try it on this build (virtual machine)
+        working-directory: xeeonos-extensions
+        env:
+          BOOT_TEST: ${{ github.workspace }}/xeeonos/tools/boot-test.sh
+        run: tools/boot-check.sh "$VERSION" "$NAME" "$WORK/out" "$WORK/system"
+
+  # One check with a fixed name, for the branch rules of stable. Green when
+  # the extensions are not tried (pull requests to testing).
+  extensions:
+    name: Test optional extensions
+    needs: [build, extensions-plan, extension]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          PLAN: ${{ needs.extensions-plan.result }}
+          BUILD: ${{ needs.build.result }}
+          EXTENSIONS: ${{ needs.extension.result }}
+        run: |
+          echo "plan: $PLAN, build: $BUILD, extensions: $EXTENSIONS"
+          [[ $PLAN == skipped ]] && exit 0
+          [[ $PLAN == success && $BUILD == success && $EXTENSIONS =~ ^(success|skipped)$ ]]
+
+  # Publishing: only for pushes to testing, or a stable version (stable.yml,
+  # through workflow_call), after every test passed.
   publish:
     name: Publish update to ghcr.io
-    needs: test
-    if: github.event_name == 'push' || inputs.version != ''
+    needs: [test, stable-update, extensions]
+    if: >-
+      !cancelled() && (github.event_name == 'push' || inputs.version != '') &&
+      needs.test.result == 'success' &&
+      contains(fromJSON('["success","skipped"]'), needs.stable-update.result) &&
+      needs.extensions.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: write # the GitHub release with the ISO

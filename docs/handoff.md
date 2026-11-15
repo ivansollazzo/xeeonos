@@ -92,10 +92,18 @@ Le versioni seguono il mese (`AA.MM`: 26.11, a gennaio 27.1). Ramo = canale
    correzioni anche, e se servono su stable una seconda pull request verso
    `stable` (backport).
 
-**Pubblicare una versione stable**: Actions → **Pubblica versione** → "Run
-workflow" scegliendo il ramo `stable`. Il workflow calcola il numero
+**Pubblicare una versione stable**: tutto entra in `stable` con una pull
+request, e **ogni merge pubblica**. Aggiornamento normale: Actions →
+**Update Arch snapshot** su `testing` (merge quando è verde), poi Actions →
+**Create new stable** → "Run workflow" su `testing`: apre la pull request
+da testing (congelato in un ramo `new-stable-<n>`) verso `stable`. Il
+resto (correzioni di xctl, aggiornamenti urgenti di Arch, che spostano
+tutto lo snapshot) lo fai con Claude Code, con una pull request apposita
+verso `stable`. Le pull request verso stable fanno tutti i test, più
+l'aggiornamento dalla stable di oggi e tutte le estensioni opzionali sulle
+nuove immagini. Al merge, il workflow **Publish stable** calcola il numero
 (`AA.MM.S`: S cresce a ogni pubblicazione del mese, poi riparte: 26.12.1,
-26.12.2, 27.1.1), costruisce, fa tutti i test e, solo se è tutto verde,
+26.12.2, 27.1.1), costruisce, rifà tutti i test e, solo se è tutto verde,
 pubblica la versione firmata sul canale `stable` e crea la release GitHub
 `v26.12.2` con la ISO (segnata "Latest"; crea anche il tag `v26.12.2`).
 Ogni merge su `testing` mette la sua ISO in una pre-release
@@ -104,8 +112,8 @@ rete** (solo il sistema live, circa 750 MB: durante l'installazione scarica
 XeeonOS dal canale, serve Internet); la ISO **completa** (2,6 GB, installa
 senza rete) supera il limite di 2 GB di GitHub e resta nell'artifact
 `xeeonos-iso` della run.
-Se qualcosa è rosso non esce niente: correggi su `stable` e rilancia. I
-merge su `stable` da soli non pubblicano niente.
+Se qualcosa è rosso non esce niente: "Re-run failed jobs", oppure una
+nuova pull request di correzione verso `stable`.
 
 Un sistema cambia canale con `sudo xctl channel set testing` (o `stable`), poi `sudo xctl update`.
 

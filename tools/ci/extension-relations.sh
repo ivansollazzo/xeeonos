@@ -36,7 +36,7 @@ step 1 "
 systemctl start network-online.target
 xctl extensions list $src | sed s,^,REMOTE-,
 xctl extensions enable ci-needs $src </dev/null 2>&1 | sed s,^,NEEDS-ASK-,
-xctl extensions list --offline | grep -q 'ci-needs' || echo NEEDS-REFUSED
+xctl extensions list --offline | grep -Eq 'ci-(needs|hello) +on' || echo NEEDS-REFUSED
 xctl extensions enable ci-needs --yes $src
 xctl extensions list --offline | sed s,^,ON-,
 xctl extensions disable ci-hello </dev/null 2>&1 | sed s,^,DISABLE-ASK-,

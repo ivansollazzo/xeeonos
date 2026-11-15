@@ -1,0 +1,13 @@
+[package]
+name = "xctl-system"
+description = "xctl: install, setup, recovery and the rest"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+xctl-core.workspace = true
+xctl-fetch.workspace = true
+xctl-extensions.workspace = true
+xctl-update.workspace = true
+serde_json.workspace = true

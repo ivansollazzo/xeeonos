@@ -1,15 +1,34 @@
-[package]
-name = "xctl"
+# xctl, the XeeonOS system tool: one program, made of several crates
+# (crates/), each with its own job:
+#
+#   xctl-core        shared pieces: paths, errors, dialogs, versions, boot
+#                    entries, data snapshots, Secure Boot state, apps
+#   xctl-fetch       getting files: registry (OCI), web, directory, checked
+#                    against the signed manifest
+#   xctl-extensions  system extensions (xctl extensions)
+#   xctl-update      updates and channels (xctl update, xctl channel)
+#   xctl-system      everything else: install, setup, recovery, encryption,
+#                    network, firewall, SSH, health, status, report
+#   xctl             the program: picks the command
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
-description = "The XeeonOS system tool"
 publish = false
 
 # Few, well-known crates. Cargo.lock pins their exact versions and checksums,
 # and the image build uses `--locked`, so nothing changes behind our back.
-[dependencies]
+[workspace.dependencies]
 # Reading the JSON answers of the container registry (OCI manifests).
 serde_json = "1"
+xctl-core = { path = "crates/xctl-core" }
+xctl-fetch = { path = "crates/xctl-fetch" }
+xctl-extensions = { path = "crates/xctl-extensions" }
+xctl-update = { path = "crates/xctl-update" }
+xctl-system = { path = "crates/xctl-system" }
 
 [profile.release]
 # Small, fast binary: optimize, strip symbols, link-time optimization.

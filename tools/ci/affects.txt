@@ -14,26 +14,26 @@
 * mkosi.conf.d/system/ mkosi.conf.d/drivers/ mkosi.conf.d/xctl/ mkosi.profiles/gnome/ mkosi.profiles/audio/
 * secureboot/ .github/workflows/build.yml tools/boot-test.sh tools/ci/common.sh
 * tools/ci/affects.txt tools/ci/affected.sh tools/image-key.sh tools/version.sh
-* xctl/Cargo.toml xctl/Cargo.lock xctl/src/main.rs xctl/src/util.rs xctl/src/ui.rs
-* xctl/src/status.rs xctl/src/health.rs xctl/src/boot.rs
+* xctl/Cargo.toml xctl/Cargo.lock xctl/crates/xctl-core/Cargo.toml xctl/crates/xctl-core/src/lib.rs xctl/crates/xctl-extensions/Cargo.toml xctl/crates/xctl-extensions/src/lib.rs xctl/crates/xctl-fetch/Cargo.toml xctl/crates/xctl-fetch/src/lib.rs xctl/crates/xctl-system/Cargo.toml xctl/crates/xctl-system/src/lib.rs xctl/crates/xctl-update/Cargo.toml xctl/crates/xctl-update/src/lib.rs xctl/crates/xctl/Cargo.toml xctl/crates/xctl-core/src/config.rs xctl/crates/xctl/src/main.rs xctl/crates/xctl-core/src/util.rs xctl/crates/xctl-core/src/ui.rs
+* xctl/crates/xctl-system/src/status.rs xctl/crates/xctl-system/src/health.rs xctl/crates/xctl-core/src/boot.rs
 
-update tools/ci/update.sh tools/mkupdate.sh xctl/src/update.rs xctl/src/oci.rs
-update xctl/src/version.rs xctl/src/channel.rs xctl/src/snapshots.rs xctl/src/ext.rs
-setup tools/ci/setup.sh xctl/src/setup.rs xctl/src/network.rs
-recovery tools/ci/recovery.sh xctl/src/recovery.rs xctl/src/install.rs xctl/src/snapshots.rs
-network tools/ci/network.sh xctl/src/network.rs xctl/src/firewall.rs
-encryption tools/ci/encryption.sh xctl/src/encryption.rs xctl/src/setup.rs
-base tools/ci/base.sh xctl/src/firewall.rs xctl/src/report.rs xctl/src/packages.rs
-snapshots tools/ci/snapshots.sh xctl/src/snapshots.rs xctl/src/update.rs
+update tools/ci/update.sh tools/mkupdate.sh xctl/crates/xctl-update/src/update.rs xctl/crates/xctl-fetch/src/oci.rs
+update xctl/crates/xctl-core/src/version.rs xctl/crates/xctl-update/src/channel.rs xctl/crates/xctl-core/src/snapshots.rs xctl/crates/xctl-extensions/src/ext.rs
+setup tools/ci/setup.sh xctl/crates/xctl-system/src/setup.rs xctl/crates/xctl-system/src/network.rs
+recovery tools/ci/recovery.sh xctl/crates/xctl-system/src/recovery.rs xctl/crates/xctl-system/src/install.rs xctl/crates/xctl-core/src/snapshots.rs
+network tools/ci/network.sh xctl/crates/xctl-system/src/network.rs xctl/crates/xctl-system/src/firewall.rs
+encryption tools/ci/encryption.sh xctl/crates/xctl-system/src/encryption.rs xctl/crates/xctl-system/src/setup.rs
+base tools/ci/base.sh xctl/crates/xctl-system/src/firewall.rs xctl/crates/xctl-system/src/report.rs xctl/crates/xctl-system/src/packages.rs
+snapshots tools/ci/snapshots.sh xctl/crates/xctl-core/src/snapshots.rs xctl/crates/xctl-update/src/update.rs
 hibernate tools/ci/hibernate.sh
-desktop tools/ci/desktop.sh xctl/src/ext.rs extensions/flatpak/ extensions/scanner/
-tools tools/ci/tools.sh mkosi.conf.d/tools/ xctl/src/ssh.rs xctl/src/firewall.rs
-flatpak tools/ci/flatpak.sh extensions/flatpak/ tools/mkext.sh tools/mkext-install.sh xctl/src/ext.rs xctl/src/apps.rs
-printing tools/ci/printing.sh extensions/printing/ tools/mkext.sh tools/mkext-install.sh xctl/src/ext.rs
-scanner tools/ci/scanner.sh extensions/scanner/ tools/mkext.sh tools/mkext-install.sh xctl/src/ext.rs
+desktop tools/ci/desktop.sh xctl/crates/xctl-extensions/src/ext.rs extensions/flatpak/ extensions/scanner/
+tools tools/ci/tools.sh mkosi.conf.d/tools/ xctl/crates/xctl-system/src/ssh.rs xctl/crates/xctl-system/src/firewall.rs
+flatpak tools/ci/flatpak.sh extensions/flatpak/ tools/mkext.sh tools/mkext-install.sh xctl/crates/xctl-extensions/src/ext.rs xctl/crates/xctl-core/src/apps.rs
+printing tools/ci/printing.sh extensions/printing/ tools/mkext.sh tools/mkext-install.sh xctl/crates/xctl-extensions/src/ext.rs
+scanner tools/ci/scanner.sh extensions/scanner/ tools/mkext.sh tools/mkext-install.sh xctl/crates/xctl-extensions/src/ext.rs
 extensions tools/ci/extensions.sh extensions/ tools/mkext.sh tools/mkext-install.sh
-extensions xctl/src/ext.rs xctl/src/update.rs
-secureboot tools/ci/secureboot.sh tools/secureboot.sh xctl/src/secureboot.rs
-secureboot xctl/src/encryption.rs xctl/src/update.rs
-iso-install tools/ci/iso-install.sh tools/mkiso.sh mkosi.profiles/live/ xctl/src/install.rs xctl/src/setup.rs xctl/src/update.rs xctl/src/oci.rs
-iso-alongside tools/ci/iso-alongside.sh tools/mkiso.sh mkosi.profiles/live/ xctl/src/install.rs
+extensions xctl/crates/xctl-extensions/src/ext.rs xctl/crates/xctl-update/src/update.rs
+secureboot tools/ci/secureboot.sh tools/secureboot.sh xctl/crates/xctl-core/src/secureboot.rs
+secureboot xctl/crates/xctl-system/src/encryption.rs xctl/crates/xctl-update/src/update.rs
+iso-install tools/ci/iso-install.sh tools/mkiso.sh mkosi.profiles/live/ xctl/crates/xctl-system/src/install.rs xctl/crates/xctl-system/src/setup.rs xctl/crates/xctl-update/src/update.rs xctl/crates/xctl-fetch/src/oci.rs
+iso-alongside tools/ci/iso-alongside.sh tools/mkiso.sh mkosi.profiles/live/ xctl/crates/xctl-system/src/install.rs

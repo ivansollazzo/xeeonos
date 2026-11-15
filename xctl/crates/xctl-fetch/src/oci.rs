@@ -18,8 +18,8 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::update::{download_with, is_plain_file_name};
-use crate::util::{Result, err};
+use crate::manifest::{download_with, is_plain_file_name};
+use xctl_core::util::{Result, err};
 
 /// A reference like `ghcr.io/ivansollazzo/xeeonos:experimental`, split up.
 #[derive(Debug, PartialEq)]

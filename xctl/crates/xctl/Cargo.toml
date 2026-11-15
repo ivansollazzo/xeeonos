@@ -1,0 +1,12 @@
+[package]
+name = "xctl"
+description = "The XeeonOS system tool"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+xctl-core.workspace = true
+xctl-extensions.workspace = true
+xctl-update.workspace = true
+xctl-system.workspace = true

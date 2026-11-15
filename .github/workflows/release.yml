@@ -48,7 +48,7 @@ jobs:
           month=$(date -u +%y.%-m)
           last=$(git tag --merged origin/stable --list "v$month.*" |
             sed "s/^v$month\\.//" |
-            grep -E '^[0-9]+$' |
+            awk '/^[0-9]+$/ { print }' |
             sort -n |
             tail -n1)
 

@@ -33,6 +33,8 @@ printing tools/ci/printing.sh extensions/printing/ tools/mkext.sh tools/mkext-in
 scanner tools/ci/scanner.sh extensions/scanner/ tools/mkext.sh tools/mkext-install.sh xctl/crates/xctl-extensions/src/ext.rs
 extensions tools/ci/extensions.sh extensions/ tools/mkext.sh tools/mkext-install.sh
 extensions xctl/crates/xctl-extensions/src/ext.rs xctl/crates/xctl-update/src/update.rs xctl/crates/xctl-fetch/src/manifest.rs
+extension-relations tools/ci/extension-relations.sh extensions/ci-hello/ extensions/ci-needs/ extensions/ci-clash/ tools/mkext.sh tools/mkext-install.sh
+extension-relations xctl/crates/xctl-extensions/src/ext.rs xctl/crates/xctl-fetch/src/manifest.rs
 secureboot tools/ci/secureboot.sh tools/secureboot.sh xctl/crates/xctl-core/src/secureboot.rs
 secureboot xctl/crates/xctl-system/src/encryption.rs xctl/crates/xctl-update/src/update.rs
 iso-install tools/ci/iso-install.sh tools/mkiso.sh mkosi.profiles/live/ xctl/crates/xctl-system/src/install.rs xctl/crates/xctl-system/src/setup.rs xctl/crates/xctl-update/src/update.rs xctl/crates/xctl-fetch/src/oci.rs xctl/crates/xctl-fetch/src/manifest.rs

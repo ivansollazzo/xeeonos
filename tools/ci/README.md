@@ -11,7 +11,8 @@ own with "Re-run failed jobs".
 the job summary (so the required checks are still satisfied). Changes to
 the system's core, the build or the test machinery run every test, and so
 does any file `affects.txt` does not know (documentation aside). Pushes to
-channel branches (after a merge, before publishing) always run every test.
+channel branches (after a merge, before publishing) and pull requests to
+`stable` always run every test.
 
 | Script | What it tests | Uses |
 |---|---|---|
@@ -27,6 +28,8 @@ channel branches (after a merge, before publishing) always run every test.
 | `scanner.sh` | scanners: SANE with the driverless backend (airscan), ipp-usb, Avahi, Document Scanner, extension included and on | disk image |
 | `printing.sh` | printing: CUPS on demand, add a printer, Avahi and `.local` names, Printers page of Settings (cups-pk-helper) | disk image |
 | `extensions.sh` | system extensions: included ones on, special ones ask, the test extension ci-hello downloaded (signed, with its manifest), removed, installed from its file (with a warning) | disk image, system |
+| `extension-relations.sh` | what extensions need and cannot be on with: ci-needs (Requires=ci-hello) asks, then brings ci-hello; turning off ci-hello asks; ci-clash (Conflicts=ci-hello) turns both off; still so after a restart | disk image, system |
+| `stable-update.sh` | only for pull requests to stable and the publishing of stable: the stable version published today (disk made from ghcr.io, with data and the extension ci-hello) updates itself to this build, which starts with the data and the extension | system, ghcr.io, xeeonos-extensions |
 | `hibernate.sh` | hibernate into the swap file, start again: the session resumes | disk image |
 | `secureboot.sh` | Secure Boot (firmware without keys): keys enrolled, signed start, TPM unlock without password, signed update, another TPM asks the password | disk image, next version |
 | `encryption.sh` | disk password on and off (recovery key), then a normal start | disk image |

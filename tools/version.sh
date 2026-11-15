@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 # Print the full XeeonOS version for this build (docs/updates.md).
 #

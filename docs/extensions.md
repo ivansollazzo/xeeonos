@@ -9,7 +9,10 @@ with a XeeonOS manifest inside), laid over `/usr` at every boot
 
 ```
 xctl extensions list                      # installed ones and their state, then those
-                                          # that can be downloaded for this version
+                                          # available for this version
+xctl extensions list --installed          # only the installed ones (--available: only the others)
+xctl extensions search docker             # find by name or description
+sudo xctl update --extensions             # bring downloaded extensions up to date (--check: only look)
 sudo xctl extensions enable docker        # download (signed) and turn on
 sudo xctl extensions disable docker       # turn off
 sudo xctl extensions remove docker        # turn off and delete
@@ -25,7 +28,9 @@ change made with `--no-apply` (enable, disable, install). Programs already
 running from an extension that is turned off keep running until they exit.
 
 `xctl extensions list` shows two sections: **Installed** (included,
-downloaded, from a file) and **Can be downloaded** for the running version.
+downloaded, from a file) and **Available for XeeonOS <version>** (the
+running version); `--installed` and `--available` show only one of them,
+and `xctl extensions search <text>` looks in both, by name and description.
 The second one is read from the extensions' registry: the manifests
 (`<name>.conf`) published next to the images and listed in the signed
 `SHA256SUMS`, so an extension added to xeeonos-extensions later shows up

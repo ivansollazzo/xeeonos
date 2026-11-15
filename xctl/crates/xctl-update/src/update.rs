@@ -36,6 +36,7 @@ pub fn run(args: &[String]) -> Result<()> {
     // Parse the options.
     let mut from = None;
     let mut check = false;
+    let mut extensions = false;
     let mut keyrings = vec![PathBuf::from(config::KEYRING)];
     let mut it = args.iter();
     while let Some(arg) = it.next() {
@@ -48,11 +49,16 @@ pub fn run(args: &[String]) -> Result<()> {
                 )
             }
             "--check" => check = true,
+            "--extensions" => extensions = true,
             "--keyring" => keyrings.push(PathBuf::from(
                 it.next().ok_or_else(|| err("--keyring needs a file"))?,
             )),
             other => return Err(err(format!("unknown option for update: {other}"))),
         }
+    }
+    // Only the extensions of the installed version (xctl-extensions).
+    if extensions {
+        return crate::ext::refresh(from, &keyrings, check);
     }
     if !check {
         need_root("update")?;

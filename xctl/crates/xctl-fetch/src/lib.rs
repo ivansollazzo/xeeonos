@@ -3,5 +3,6 @@
 
 pub mod manifest;
 pub mod oci;
+pub mod progress;
 
 pub use manifest::Source;

@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::oci;
+use crate::progress;
 use xctl_core::config;
 use xctl_core::util::{Result, err, output};
 use xctl_core::version::compare;
@@ -91,7 +92,13 @@ pub fn fetch_files(source: &Source, dir: &Path, names: &[String]) -> Result<()> 
         Source::Http(base) => {
             println!("Downloading from {base}...");
             for name in names {
-                download(&format!("{base}/{name}"), &dir.join(name))?;
+                let url = format!("{base}/{name}");
+                let size = if progress::watching() {
+                    remote_size(&url)
+                } else {
+                    None
+                };
+                download_large(&url, &dir.join(name), &[], size)?;
             }
         }
         Source::Dir(from) => {
@@ -123,6 +130,26 @@ fn wait_for_network() {
 /// Download `url` into the file `to` with curl, retrying on network errors.
 /// `headers` are extra HTTP headers, e.g. "Authorization: Bearer ...".
 pub fn download_with(url: &str, to: &Path, headers: &[String]) -> Result<()> {
+    download_sized(url, to, headers, None)
+}
+
+/// Like `download_with`, for a file worth a progress line (shown only when
+/// someone is watching, see `progress`): `total` is its size, if known.
+pub fn download_large(url: &str, to: &Path, headers: &[String], total: Option<u64>) -> Result<()> {
+    if !progress::watching() {
+        return download_with(url, to, headers);
+    }
+    download_sized(url, to, headers, Some(total))
+}
+
+/// curl, with a progress line when `progress` is Some(size if known).
+fn download_sized(
+    url: &str,
+    to: &Path,
+    headers: &[String],
+    progress: Option<Option<u64>>,
+) -> Result<()> {
+    let to_path = to;
     let to = to.to_str().ok_or_else(|| err("non-UTF-8 path"))?;
     let mut args: Vec<&str> = vec![
         "--fail",
@@ -141,9 +168,29 @@ pub fn download_with(url: &str, to: &Path, headers: &[String]) -> Result<()> {
         args.push("--header");
         args.push(h);
     }
+    if let Some(total) = progress {
+        let label = to_path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        return progress::curl_with_progress(&args, url, to_path, &label, total);
+    }
     args.extend(["--output", to, url]);
     output("curl", &args)?;
     Ok(())
+}
+
+/// The size of the file at `url` (HTTP Content-Length), if the server says.
+fn remote_size(url: &str) -> Option<u64> {
+    let head = output("curl", &["--fail", "--silent", "--head", "--location", url]).ok()?;
+    head.lines()
+        .filter_map(|l| {
+            let (k, v) = l.split_once(':')?;
+            k.trim()
+                .eq_ignore_ascii_case("content-length")
+                .then(|| v.trim().parse::<u64>().ok())?
+        })
+        .next_back()
 }
 
 fn download(url: &str, to: &Path) -> Result<()> {
@@ -180,6 +227,30 @@ pub fn manifest_files(manifest: &str) -> Result<Vec<String>> {
             }
         })
         .collect()
+}
+
+/// The SHA-256 of each file in a (verified) SHA256SUMS manifest, by name.
+pub fn manifest_hashes(manifest: &str) -> Vec<(String, String)> {
+    manifest
+        .lines()
+        .filter_map(|line| {
+            let mut words = line.split_whitespace();
+            let hash = words.next()?;
+            let name = words.next()?.trim_start_matches('*');
+            (hash.len() == 64 && is_plain_file_name(name))
+                .then(|| (name.to_string(), hash.to_lowercase()))
+        })
+        .collect()
+}
+
+/// The SHA-256 of a file on this computer.
+pub fn file_hash(path: &Path) -> Result<String> {
+    let path = path.to_str().ok_or_else(|| err("non-UTF-8 path"))?;
+    let out = output("sha256sum", &["--", path])?;
+    out.split_whitespace()
+        .next()
+        .map(str::to_string)
+        .ok_or_else(|| err(format!("sha256sum gave nothing for {path}")))
 }
 
 /// Check SHA256SUMS.gpg against the trusted keys with gpgv.
@@ -280,6 +351,19 @@ mod tests {
         assert_eq!(
             Source::parse("/run/media/usb"),
             Source::Dir("/run/media/usb".into())
+        );
+    }
+
+    #[test]
+    fn hashes() {
+        let h = "a".repeat(64);
+        let m = format!("{h}  xeeonos_1.docker.xext\n{h} *docker.conf\nshort  x\n");
+        assert_eq!(
+            manifest_hashes(&m),
+            vec![
+                ("xeeonos_1.docker.xext".to_string(), h.clone()),
+                ("docker.conf".to_string(), h.clone())
+            ]
         );
     }
 

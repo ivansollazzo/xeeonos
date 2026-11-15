@@ -31,6 +31,11 @@ Commands:
       --keyring <file>   Also accept updates signed by the keys in <file>.
       --check            Only say whether a newer version is available
                          (downloads only the small signed manifest; no root).
+      --extensions       Only the extensions turned on, for this version:
+                         download again those with a newer build (or not
+                         downloaded yet); the system is not touched. With
+                         --check, only say which ones.
+                         Large downloads show a progress line on a terminal.
   rollback [--yes]       Go back to the previous version at the next restart
                          (asks first; the version left is turned off until
                          the next `xctl update`).
@@ -44,8 +49,14 @@ Commands:
   channel reset          Go back to the channel this version was built for.
   extensions [list]      List the system extensions (software added on top
                          of the sealed system, see docs/extensions.md): the
-                         installed ones, and those that can be downloaded
-                         for this version (needs the network).
+                         installed ones, and those available for this
+                         version (needs the network).
+      --installed        Only the installed ones.
+      --available        Only those available for download.
+      --offline          Do not look for those available.
+  extensions search <text>
+                         The installed and available extensions whose name
+                         or description contains <text>.
   extensions enable <name>
                          Turn an extension on (an optional one is downloaded
                          first), at once (one with kernel modules: from the

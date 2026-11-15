@@ -300,31 +300,106 @@ pub fn run(args: &[String]) -> Result<()> {
     match args.first().map(String::as_str) {
         None => list(&[]),
         Some("list") => list(&args[1..]),
+        Some("search") => search(&args[1..]),
         Some("enable") => enable(&args[1..]),
         Some("disable") => disable(&args[1..]),
         Some("install") => install(&args[1..]),
         Some("remove") => remove(&args[1..]),
         Some("activate") => activate(),
         Some(other) => Err(err(format!(
-            "unknown extensions command '{other}' (expected list, enable <name>, disable <name>, \
-             install <file> or remove <name>)"
+            "unknown extensions command '{other}' (expected list, search <text>, enable <name>, \
+             disable <name>, install <file> or remove <name>)"
         ))),
     }
 }
 
-/// `xctl extensions list [--from <source>] [--keyring <file>] [--offline]`:
-/// the installed extensions (those of this version, the downloaded ones and
-/// those from a file), then those that can be downloaded for this version:
-/// their manifests, published with the signed manifest of the extensions'
-/// registry.
+/// What `list` and `search` show.
+#[derive(Default)]
+struct ListOptions {
+    /// Only the installed ones (no network needed).
+    installed_only: bool,
+    /// Only those that can be downloaded.
+    available_only: bool,
+    /// Only those whose name or description contains this (any case).
+    filter: Option<String>,
+}
+
+/// `xctl extensions list [--installed|--available] [--from <source>] [--keyring <file>] [--offline]`
 fn list(args: &[String]) -> Result<()> {
+    let mut opts = ListOptions::default();
+    let mut rest = Vec::new();
+    for arg in args {
+        match arg.as_str() {
+            "--installed" => opts.installed_only = true,
+            "--available" => opts.available_only = true,
+            _ => rest.push(arg.clone()),
+        }
+    }
+    if opts.installed_only && opts.available_only {
+        return Err(err("--installed and --available: give one of the two"));
+    }
+    show(&rest, &opts)
+}
+
+/// `xctl extensions search <text> [list options]`: the installed and the
+/// downloadable extensions whose name or description contains <text>.
+fn search(args: &[String]) -> Result<()> {
+    let (text, rest) = match args.split_first() {
+        Some((text, rest)) if !text.starts_with('-') => (text.clone(), rest),
+        _ => return Err(err("usage: xctl extensions search <text>")),
+    };
+    let mut opts = ListOptions {
+        filter: Some(text.to_lowercase()),
+        ..Default::default()
+    };
+    let mut others = Vec::new();
+    for arg in rest {
+        match arg.as_str() {
+            "--installed" => opts.installed_only = true,
+            "--available" => opts.available_only = true,
+            _ => others.push(arg.clone()),
+        }
+    }
+    show(&others, &opts)
+}
+
+/// Does `ext` match the search text (name or description, any case)?
+fn matches(ext: &Extension, filter: &Option<String>) -> bool {
+    filter.as_ref().is_none_or(|f| {
+        ext.name.to_lowercase().contains(f) || ext.description.to_lowercase().contains(f)
+    })
+}
+
+/// Colours for the state, only on a terminal.
+fn paint(state: &str, width: usize) -> String {
+    let padded = format!("{state:<width$}");
+    if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        return padded;
+    }
+    let code = if state == "on" {
+        "32" // green
+    } else if state == "off" {
+        "2" // dim
+    } else if state.is_empty() {
+        return padded;
+    } else {
+        "33" // yellow: on or off from the next restart, not downloaded
+    };
+    format!("\x1b[{code}m{padded}\x1b[0m")
+}
+
+/// The two sections: the installed extensions (those of this version, the
+/// downloaded ones and those from a file), then those available for this
+/// version: their manifests, published with the signed manifest of the
+/// extensions' registry.
+fn show(args: &[String], opts: &ListOptions) -> Result<()> {
     let (from, keyrings, offline) = source_options(args, &["--offline"])?;
     let version = running_version()?;
     let all = known();
     let choices = choices();
     let active = active_now();
-    let mut rows = Vec::new();
-    for ext in &all {
+    let mut installed = Vec::new();
+    for ext in all.iter().filter(|e| matches(e, &opts.filter)) {
         let on = is_on(ext, &choices);
         let running = active.contains(&ext.name);
         let state = match (on, running) {
@@ -341,7 +416,7 @@ fn list(args: &[String]) -> Result<()> {
             (false, false, true) => "optional, special",
             (false, false, false) => "optional",
         };
-        rows.push((
+        installed.push((
             ext.name.clone(),
             state.to_string(),
             format!("{} ({kind}){}", ext.description, relations(ext)),
@@ -349,54 +424,72 @@ fn list(args: &[String]) -> Result<()> {
     }
 
     // What can be downloaded: not when offline, or asked not to look.
-    let mut more = Vec::new();
+    let mut available = Vec::new();
     let mut note = None;
-    if offline {
-        note = Some("not checked (--offline)".to_string());
-    } else {
-        let source = Source::parse(&from.unwrap_or_else(|| default_source(&version)));
-        if !matches!(source, Source::Dir(_)) && !network_up() {
-            note = Some("not checked: no network".to_string());
+    if !opts.installed_only {
+        if offline {
+            note = Some("not checked (--offline)".to_string());
         } else {
-            match published(&source, &version, &keyrings) {
-                Ok(list) => {
-                    more = list
-                        .into_iter()
-                        .filter(|e| !all.iter().any(|a| a.name == e.name))
-                        .collect()
+            let source = Source::parse(&from.unwrap_or_else(|| default_source(&version)));
+            if !matches!(source, Source::Dir(_)) && !network_up() {
+                note = Some("not checked: no network".to_string());
+            } else {
+                match published(&source, &version, &keyrings) {
+                    Ok(list) => {
+                        for ext in list.iter().filter(|e| {
+                            !all.iter().any(|a| a.name == e.name) && matches(e, &opts.filter)
+                        }) {
+                            let kind = if ext.special {
+                                "optional, special"
+                            } else {
+                                "optional"
+                            };
+                            available.push((
+                                ext.name.clone(),
+                                String::new(),
+                                format!("{} ({kind}){}", ext.description, relations(ext)),
+                            ));
+                        }
+                    }
+                    Err(e) => note = Some(format!("could not be checked ({e})")),
                 }
-                Err(e) => note = Some(format!("could not be checked ({e})")),
             }
         }
     }
-    for ext in &more {
-        let kind = if ext.special {
-            "optional, special"
-        } else {
-            "optional"
-        };
-        rows.push((
-            ext.name.clone(),
-            String::new(),
-            format!("{} ({kind}){}", ext.description, relations(ext)),
-        ));
-    }
-    let width = rows.iter().map(|r| r.0.len()).max().unwrap_or(0);
-    let row = |(name, state, what): &(String, String, String)| {
-        println!("  {name:<width$}  {state:<27}  {what}");
-    };
 
-    println!("Installed:");
-    if all.is_empty() {
-        println!("  none");
+    let width = installed
+        .iter()
+        .chain(&available)
+        .map(|r| r.0.len())
+        .max()
+        .unwrap_or(0);
+    let row = |(name, state, what): &(String, String, String)| {
+        println!("  {name:<width$}  {}  {what}", paint(state, 27));
+    };
+    let none = if opts.filter.is_some() {
+        "  nothing found"
+    } else {
+        "  none"
+    };
+    if !opts.available_only {
+        println!("Installed:");
+        if installed.is_empty() {
+            println!("{none}");
+        }
+        installed.iter().for_each(row);
     }
-    rows.iter().take(all.len()).for_each(row);
-    println!("Can be downloaded for XeeonOS {version}:");
-    match (&note, more.is_empty()) {
-        (Some(note), _) => println!("  {note}"),
-        (None, true) => println!("  none"),
-        (None, false) => rows.iter().skip(all.len()).for_each(row),
+    if !opts.installed_only {
+        if !opts.available_only {
+            println!();
+        }
+        println!("Available for XeeonOS {version}:");
+        match (&note, available.is_empty()) {
+            (Some(note), _) => println!("  {note}"),
+            (None, true) => println!("{none}"),
+            (None, false) => available.iter().for_each(row),
+        }
     }
+    println!();
     println!("Turn on or off with: sudo xctl extensions enable|disable <name>");
     Ok(())
 }
@@ -791,6 +884,104 @@ fn copy_image(from: &Path, to: &Path) -> Result<()> {
     let (from_s, to_s) = (from.to_string_lossy(), to.to_string_lossy());
     if run_program("cp", &["--reflink=auto", "--", &from_s, &to_s]).is_err() {
         fs::copy(from, to)?;
+    }
+    Ok(())
+}
+
+/// `xctl update --extensions [--check] [--from <source>] [--keyring <file>]`:
+/// the optional extensions turned on, for the installed version, again from
+/// their registry when it has a newer build of them (xeeonos-extensions can
+/// publish an extension again for the same XeeonOS version, with a fix), or
+/// when they are on but not downloaded. The system is not touched.
+pub fn refresh(from: Option<String>, keyrings: &[PathBuf], check: bool) -> Result<()> {
+    if !check {
+        need_root("update --extensions")?;
+    }
+    let version = running_version()?;
+    let source = Source::parse(&from.unwrap_or_else(|| default_source(&version)));
+    let dir = if check {
+        std::env::temp_dir().join(format!("xctl-ext-check-{}", std::process::id()))
+    } else {
+        PathBuf::from(config::EXTENSIONS_CACHE)
+    };
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir)?;
+    let _cleanup = update::Cleanup(&dir);
+    update::fetch_manifest(&source, &dir, keyrings)?;
+    let manifest = fs::read_to_string(dir.join("SHA256SUMS"))?;
+    let hashes = update::manifest_hashes(&manifest);
+    let names = update::manifest_files(&manifest)?;
+
+    let choices = choices();
+    let mut stale = Vec::new();
+    for ext in known() {
+        if !is_on(&ext, &choices) || ext.local || ext.included_image().is_some() {
+            continue;
+        }
+        let file = update_file(&version, &ext.name);
+        let Some((_, published)) = hashes.iter().find(|(n, _)| *n == file) else {
+            println!(
+                "Extension {}: not published for XeeonOS {version} (yet)",
+                ext.name
+            );
+            continue;
+        };
+        let stored = ext.stored_image(&version);
+        let why = if !stored.exists() {
+            "not downloaded"
+        } else if update::file_hash(&stored)? != *published {
+            "newer build"
+        } else {
+            continue;
+        };
+        stale.push((ext, why));
+    }
+    if stale.is_empty() {
+        println!("Extensions: up to date for XeeonOS {version}.");
+        return Ok(());
+    }
+    if check {
+        for (ext, why) in &stale {
+            println!("Extension {}: can be updated ({why})", ext.name);
+        }
+        println!("Update them with: sudo xctl update --extensions");
+        return Ok(());
+    }
+
+    let active = active_now();
+    let mut refresh_now = false;
+    let mut later = Vec::new();
+    for (ext, why) in &stale {
+        let files = files_of(&ext.name, &version, &names).ok_or_else(|| {
+            err(format!(
+                "the extension {} is not published for XeeonOS {version}",
+                ext.name
+            ))
+        })?;
+        println!("Extension {}: updating ({why})", ext.name);
+        update::fetch_files(&source, &dir, &files)?;
+        update::check_hashes(&dir)?;
+        store(&dir, &version, &ext.name)?;
+        if active.contains(&ext.name) {
+            if ext.live {
+                // The link in /run/extensions points to the stored file:
+                // laying the extensions over /usr again uses the new one.
+                refresh_now = true;
+            } else {
+                later.push(ext.name.clone());
+            }
+        }
+        println!("Extension {}: updated.", ext.name);
+    }
+    if refresh_now {
+        run_program("systemd-sysext", &["refresh"])?;
+        after_refresh()?;
+    }
+    if !later.is_empty() {
+        println!(
+            "In use from the next restart: {} (kernel modules).",
+            later.join(", ")
+        );
     }
     Ok(())
 }
